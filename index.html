@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>学生信息管理系统</title>
+    <style>
+        /* 全局样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #333;
+        }
+        
+        /* 侧边栏导航 */
+        .sidebar {
+            width: 80px;
+            background: #2c3e50;
+            border-right: 1px solid #34495e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 0;
+            transition: width 0.3s ease;
+        }
+        
+        .sidebar-item {
+            width: 100%;
+            padding: 20px 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .sidebar-item:hover {
+            background: #34495e;
+        }
+        
+        .sidebar-item.active {
+            background: #3498db;
+            position: relative;
+        }
+        
+        .sidebar-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 30px;
+            background: #fff;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        /* 图标样式 */
+        .sidebar-item::before {
+            font-size: 28px;
+            color: #bdc3c7;
+            transition: color 0.3s ease;
+        }
+        
+        .sidebar-item.active::before {
+            color: #fff;
+        }
+        
+        /* 主内容区域 */
+        .content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        /* 页面头部 */
+        .page-header {
+            margin-bottom: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #3498db;
+        }
+        
+        .page-header h2 {
+            color: #2c3e50;
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* 卡片样式 */
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .card:hover {
+            box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        /* 按钮样式 */
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+            box-shadow: 0 6px 18px rgba(52, 152, 219, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            background: #bdc3c7;
+            color: #7f8c8d;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+        
+        /* 状态信息 */
+        .status {
+            margin-top: 15px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            display: none;
+            font-size: 14px;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+            border: 1px solid #f5c6cb;
+        }
+        
+        /* 文件路径显示 */
+        #file-path {
+            margin: 15px 0;
+            color: #6c757d;
+            font-style: italic;
+            font-size: 14px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                flex-direction: row;
+                justify-content: space-around;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 1000;
+                padding: 10px 0;
+            }
+            
+            .content {
+                padding-bottom: 80px;
+            }
+            
+            .page-header h2 {
+                font-size: 24px;
+            }
+            
+            .card {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+            <div class="sidebar-item active" onclick="showPage('convert')" title="Excel 转 Word">📊</div>
+            <div class="sidebar-item" onclick="showPage('photo-rename')" title="照片重命名">📷</div>
+            <div class="sidebar-item" onclick="showPage('settings')" title="系统设置">⚙️</div>
+            <div class="sidebar-item" onclick="checkUpdate()" title="检查更新">🔄</div>
+        </div>
+    <div class="content">
+        <div id="convert-page" class="card">
+            <div class="page-header">
+                <h2>Excel 转 Word 工具</h2>
+            </div>
+            <p>请选择包含学生信息的 Excel 文件，系统将按照预定格式生成 Word 文档。</p>
+            <button class="btn" onclick="selectFile()">选择 Excel 文件</button>
+            <div id="file-path">未选择文件</div>
+            <button id="convert-btn" class="btn" onclick="startConversion()" disabled>开始转换</button>
+            <div id="status" class="status"></div>
+        </div>
+        <div id="photo-rename-page" class="card" style="display:none;">
+            <div class="page-header">
+                <h2>考生照片重命名工具</h2>
+            </div>
+            
+            <!-- Excel文件选择与字段选择 -->
+            <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center;">
+                    <label style="width: 120px; font-size: 14px; font-weight: 500;">Excel文件路径:</label>
+                    <input type="text" id="photo-excel-path" readonly style="flex: 1; margin: 0 10px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: #f8f9fa; transition: all 0.3s ease;">
+                    <button class="btn" onclick="selectPhotoExcelFile()" style="padding: 10px 20px; font-size: 14px;">浏览...</button>
+                </div>
+                
+                <div style="display: flex; align-items: center;">
+                    <span style="width: 120px;"></span>
+                    <span style="margin: 0 10px; font-size: 14px; color: #6c757d;">将字段:</span>
+                    <select id="input-field-combo" style="width: 140px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: white; transition: all 0.3s ease;"></select>
+                    <span style="margin: 0 10px; font-size: 14px; color: #6c757d;">转为:</span>
+                    <select id="output-field-combo" style="width: 140px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: white; transition: all 0.3s ease;"></select>
+                </div>
+            </div>
+            
+            <!-- 图片目录选择 -->
+            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                <label style="width: 120px; font-size: 14px; font-weight: 500;">原始图片目录:</label>
+                <input type="text" id="photo-folder-path" readonly style="flex: 1; margin: 0 10px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: #f8f9fa; transition: all 0.3s ease;">
+                <button class="btn" onclick="selectPhotoFolder()" style="padding: 10px 20px; font-size: 14px;">浏览...</button>
+            </div>
+            
+            <!-- 输出目录选择 -->
+            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                <label style="width: 120px; font-size: 14px; font-weight: 500;">输出目录:</label>
+                <input type="text" id="photo-output-path" readonly style="flex: 1; margin: 0 10px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: #f8f9fa; transition: all 0.3s ease;">
+                <button class="btn" onclick="selectPhotoOutputFolder()" style="padding: 10px 20px; font-size: 14px;">浏览...</button>
+            </div>
+            
+            <!-- 输出格式选择 -->
+            <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                <label style="width: 120px; font-size: 14px; font-weight: 500;">输出格式:</label>
+                <select id="output-format-combo" style="flex: 1; margin: 0 10px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: white; transition: all 0.3s ease;">
+                    <option value="keep">保持原格式</option>
+                    <option value="jpg">JPG格式</option>
+                    <option value="jpeg">JPEG格式</option>
+                    <option value="png">PNG格式</option>
+                    <option value="gif">GIF格式</option>
+                </select>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div style="display: flex; margin-bottom: 20px;">
+                <button id="photo-rename-btn" class="btn" onclick="startPhotoRenaming()" disabled style="background-color: #2196f3; color: white; font-weight: 600; padding: 12px 24px; font-size: 16px; border-radius: 8px; transition: all 0.3s ease;">开始处理</button>
+                <button id="stop-rename-btn" class="btn" onclick="stopPhotoRenaming()" disabled style="background-color: #f44336; color: white; margin-left: 10px; padding: 12px 24px; font-size: 16px; border-radius: 8px; transition: all 0.3s ease;">停止处理</button>
+            </div>
+            
+            <!-- 进度条 -->
+            <div style="margin-bottom: 20px;">
+                <div id="progress-container" style="width: 100%; height: 8px; border-radius: 4px; background-color: #e9ecef; overflow: hidden;">
+                    <div id="photo-rename-progress" style="height: 100%; width: 0%; background-color: #2196f3; transition: width 0.3s ease;"></div>
+                </div>
+                <div id="progress-text" style="text-align: center; margin-top: 8px; font-size: 14px; color: #6c757d;">等待开始...</div>
+            </div>
+            
+            <!-- 操作日志 -->
+            <div style="margin-top: 20px;">
+                <label style="font-size: 14px; font-weight: 500;">操作日志:</label>
+                <div id="photo-rename-log" style="height: 200px; overflow-y: auto; border: 1px solid #e9ecef; padding: 10px; margin-top: 10px; background-color: #f8f9fa; font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-radius: 6px;"></div>
+            </div>
+        </div>
+        
+        <div id="settings-page" class="card" style="display:none;">
+            <h2>系统设置</h2>
+            <p>应用版本: v1.0.0</p>
+            <p>存储位置: 本地数据库</p>
+            <p>安装目录: 自动识别</p>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        let selectedPath = '';
+
+        function showPage(page) {
+            document.getElementById('convert-page').style.display = page === 'convert' ? 'block' : 'none';
+            document.getElementById('photo-rename-page').style.display = page === 'photo-rename' ? 'block' : 'none';
+            document.getElementById('settings-page').style.display = page === 'settings' ? 'block' : 'none';
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+
+        function selectFile() {
+            ipcRenderer.send('select-file');
+        }
+
+        ipcRenderer.on('selected-file', (event, path) => {
+            selectedPath = path;
+            document.getElementById('file-path').innerText = `已选择: ${path}`;
+            document.getElementById('convert-btn').disabled = false;
+        });
+
+        function startConversion() {
+            const btn = document.getElementById('convert-btn');
+            const status = document.getElementById('status');
+            btn.disabled = true;
+            btn.innerText = '转换中...';
+            status.className = 'status';
+            status.innerText = '';
+            
+            ipcRenderer.send('start-conversion', { excelPath: selectedPath });
+        }
+
+        ipcRenderer.on('conversion-success', (event, outputPath) => {
+            const status = document.getElementById('status');
+            status.className = 'status success';
+            status.innerText = `转换成功！文件已保存至: ${outputPath}`;
+            document.getElementById('convert-btn').disabled = false;
+            document.getElementById('convert-btn').innerText = '开始转换';
+        });
+
+        ipcRenderer.on('conversion-error', (event, message) => {
+            const status = document.getElementById('status');
+            status.className = 'status error';
+            status.innerText = `转换失败: ${message}`;
+            document.getElementById('convert-btn').disabled = false;
+            document.getElementById('convert-btn').innerText = '开始转换';
+        });
+
+        function checkUpdate() {
+            alert('正在检查更新...');
+            ipcRenderer.send('check-for-updates');
+        }
+
+        // 照片重命名功能变量
+        let photoFolderPath = '';
+        let photoExcelPath = '';
+        let photoOutputPath = '';
+        let isProcessing = false;
+        
+        // 照片重命名功能事件处理
+        function selectPhotoFolder() {
+            ipcRenderer.send('select-photo-folder');
+        }
+        
+        function selectPhotoExcelFile() {
+            ipcRenderer.send('select-photo-excel-file');
+        }
+        
+        function selectPhotoOutputFolder() {
+            ipcRenderer.send('select-photo-output-folder');
+        }
+        
+        function updatePhotoRenameBtnState() {
+            const btn = document.getElementById('photo-rename-btn');
+            const hasExcel = !!photoExcelPath;
+            const hasFolder = !!photoFolderPath;
+            const hasOutput = !!photoOutputPath;
+            const hasFields = document.getElementById('input-field-combo').options.length > 0 && 
+                            document.getElementById('output-field-combo').options.length > 0;
+            
+            btn.disabled = !(hasExcel && hasFolder && hasOutput && hasFields);
+        }
+        
+        function startPhotoRenaming() {
+            if (isProcessing) return;
+            
+            isProcessing = true;
+            const btn = document.getElementById('photo-rename-btn');
+            const stopBtn = document.getElementById('stop-rename-btn');
+            btn.disabled = true;
+            stopBtn.disabled = false;
+            
+            // 清空日志
+            document.getElementById('photo-rename-log').innerHTML = '';
+            addLog('开始处理...');
+            
+            // 设置进度条
+            document.getElementById('photo-rename-progress').style.width = '0%';
+            document.getElementById('progress-text').innerText = '处理中...';
+            
+            // 获取输出格式
+            let outputExt = document.getElementById('output-format-combo').value;
+            
+            ipcRenderer.send('start-renaming', {
+                photoDir: photoFolderPath,
+                excelPath: photoExcelPath,
+                outputDir: photoOutputPath,
+                outputExt: outputExt,
+                inputField: document.getElementById('input-field-combo').value,
+                outputField: document.getElementById('output-field-combo').value
+            });
+        }
+        
+        function stopPhotoRenaming() {
+            ipcRenderer.send('stop-renaming');
+            isProcessing = false;
+            document.getElementById('photo-rename-btn').disabled = false;
+            document.getElementById('stop-rename-btn').disabled = true;
+            document.getElementById('progress-text').innerText = '已停止';
+        }
+        
+        function addLog(message) {
+            const logDiv = document.getElementById('photo-rename-log');
+            const timeStamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timeStamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        // 照片重命名功能的 IPC 事件监听
+        ipcRenderer.on('selected-photo-folder', (event, path) => {
+            photoFolderPath = path;
+            document.getElementById('photo-folder-path').value = path;
+            updatePhotoRenameBtnState();
+        });
+        
+        ipcRenderer.on('selected-photo-excel-file', (event, path) => {
+            photoExcelPath = path;
+            document.getElementById('photo-excel-path').value = path;
+            
+            // 获取Excel列名并填充下拉框
+            ipcRenderer.send('get-excel-columns', path);
+            updatePhotoRenameBtnState();
+        });
+        
+        ipcRenderer.on('excel-columns', (event, columns) => {
+            const inputCombo = document.getElementById('input-field-combo');
+            const outputCombo = document.getElementById('output-field-combo');
+            
+            inputCombo.innerHTML = '';
+            outputCombo.innerHTML = '';
+            
+            columns.forEach(column => {
+                const option = document.createElement('option');
+                option.value = column;
+                option.textContent = column;
+                inputCombo.appendChild(option);
+                outputCombo.appendChild(option.cloneNode(true));
+            });
+            
+            // 默认选择ksh和sfz（与原Python脚本保持一致）
+            if (columns.includes('ksh')) {
+                inputCombo.value = 'ksh';
+            }
+            if (columns.includes('sfz')) {
+                outputCombo.value = 'sfz';
+            }
+            
+            updatePhotoRenameBtnState();
+        });
+        
+        ipcRenderer.on('selected-photo-output-folder', (event, path) => {
+            photoOutputPath = path;
+            document.getElementById('photo-output-path').value = path;
+            updatePhotoRenameBtnState();
+        });
+        
+        ipcRenderer.on('renaming-status', (event, message) => {
+            addLog(message);
+        });
+        
+        ipcRenderer.on('renaming-progress', (event, progress) => {
+            document.getElementById('photo-rename-progress').style.width = `${progress}%`;
+            document.getElementById('progress-text').innerText = `进度: ${progress}%`;
+        });
+        
+        ipcRenderer.on('renaming-finished', (event, success) => {
+            isProcessing = false;
+            document.getElementById('photo-rename-btn').disabled = false;
+            document.getElementById('stop-rename-btn').disabled = true;
+            document.getElementById('progress-text').innerText = success ? '已完成!' : '已失败!';
+            
+            addLog(success ? '操作已完成!' : '操作失败!');
+        });
+        
+        ipcRenderer.on('update-status', (event, message) => {
+            alert(message);
+        });
+    </script>
+</body>
+</html>

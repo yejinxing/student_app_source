@@ -1,0 +1,36 @@
+{
+  "name": "student_app",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.student.app",
+    "productName": "学生信息管理系统",
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "docx": "^9.5.1",
+    "fs-extra": "^11.3.3",
+    "sharp": "^0.34.5",
+    "xlsx": "^0.18.5"
+  }
+}
