@@ -135,7 +135,7 @@ MIT License - 查看 LICENSE 文件以获取详细信息
 如果您有任何问题或建议，请通过以下方式联系我：
 
 - 提交 Issue
-- 发送邮件到 yejnxing0728@qq.com
+- 发送邮件到 yejinxing0728@qq.com
 - 在项目的 Discussion 页面提问
 
 ## 📈 版本历史
