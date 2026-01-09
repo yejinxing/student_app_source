@@ -37,7 +37,18 @@
 - 无需安装其他运行环境
 
 ## 📥 下载安装
-下载 `学生信息处理工具-Setup-1.0.0.exe`，双击运行即可安装。
+
+### Windows
+下载 `StudentInfoTool-Setup-1.0.0.exe`，双击运行即可安装。
+
+### macOS
+- Intel 芯片：下载 `StudentInfoTool-1.0.0-macOS-x64.dmg`
+- Apple Silicon：下载 `StudentInfoTool-1.0.0-macOS-arm64.dmg`
+
+### Linux
+- 通用：下载 `StudentInfoTool-1.0.0-Linux-x86_64.AppImage`
+- Debian/Ubuntu：下载 `StudentInfoTool-1.0.0-Linux-amd64.deb`
+- Fedora/CentOS：下载 `StudentInfoTool-1.0.0-Linux-x86_64.rpm`
 
 ---
 

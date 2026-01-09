@@ -36,16 +36,16 @@
         }
       ],
       "icon": "assets/icon.png",
-      "artifactName": "${productName}-${version}-Windows-${arch}.${ext}"
+      "artifactName": "StudentInfoTool-${version}-Windows-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "StudentInfoTool-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "${productName}-Portable-${version}.${ext}"
+      "artifactName": "StudentInfoTool-Portable-${version}.${ext}"
     },
     "mac": {
       "target": [
@@ -60,10 +60,10 @@
       ],
       "icon": "assets/icon.png",
       "category": "public.app-category.education",
-      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}"
+      "artifactName": "StudentInfoTool-${version}-macOS-${arch}.${ext}"
     },
     "dmg": {
-      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}"
+      "artifactName": "StudentInfoTool-${version}-macOS-${arch}.${ext}"
     },
     "linux": {
       "target": [
@@ -73,7 +73,7 @@
       ],
       "icon": "assets/icon.png",
       "category": "Utility",
-      "artifactName": "${productName}-${version}-Linux-${arch}.${ext}"
+      "artifactName": "StudentInfoTool-${version}-Linux-${arch}.${ext}"
     }
   },
   "keywords": [
