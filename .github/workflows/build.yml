@@ -150,19 +150,8 @@ jobs:
           # 读取原始发布说明
           ORIGINAL_BODY=$(cat RELEASE_NOTES.md)
           
-          # 构建下载说明（避免 heredoc 在 YAML 中的兼容性问题）
-          DOWNLOAD_NOTE="
-
----
-
-## 下载说明
-
-由于 Gitee 文件大小限制，安装包请通过以下方式下载：
-
-1. 应用内更新：软件会自动使用镜像加速下载
-2. 手动下载：请访问 GitHub Release 页面
-
-GitHub Release: ${GITHUB_RELEASE_URL}"
+          # 构建下载说明（使用 printf 避免 YAML 特殊字符问题）
+          DOWNLOAD_NOTE=$(printf '\n\n---\n\n## 下载说明\n\n由于 Gitee 文件大小限制，安装包请通过以下方式下载：\n\n1. 应用内更新：软件会自动使用镜像加速下载\n2. 手动下载：请访问 GitHub Release 页面\n\nGitHub Release: %s' "${GITHUB_RELEASE_URL}")
           
           FULL_BODY="${ORIGINAL_BODY}${DOWNLOAD_NOTE}"
           BODY=$(echo "$FULL_BODY" | jq -Rs .)
