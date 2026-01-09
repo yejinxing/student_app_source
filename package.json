@@ -24,15 +24,21 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.png",
@@ -42,7 +48,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "artifactName": "StudentInfoTool-Setup-${version}.${ext}"
+      "artifactName": "StudentInfoTool-Setup-${version}.${ext}",
+      "differentialPackage": true
     },
     "portable": {
       "artifactName": "StudentInfoTool-Portable-${version}.${ext}"
@@ -51,11 +58,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/icon.png",
@@ -74,6 +87,12 @@
       "icon": "assets/icon.png",
       "category": "Utility",
       "artifactName": "StudentInfoTool-${version}-Linux-${arch}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "yejinxing",
+      "repo": "student_app_source",
+      "releaseType": "release"
     }
   },
   "keywords": [
@@ -83,7 +102,7 @@
     "word",
     "photo-renamer"
   ],
-  "author": "yejinxing <yejinxing0728@qq.com>",
+  "author": "yejinxing <yejinxing1728@qq.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -96,6 +115,7 @@
   "dependencies": {
     "axios": "^1.13.2",
     "docx": "^9.5.1",
+    "electron-updater": "^6.7.3",
     "fs-extra": "^11.3.3",
     "sharp": "^0.34.5",
     "xlsx": "^0.18.5"

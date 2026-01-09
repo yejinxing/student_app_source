@@ -53,6 +53,6 @@
 ---
 
 **开发者**：yejinxing  
-**邮箱**：yejinxing0728@qq.com  
+**邮箱**：yejinxing1728@qq.com  
 **开源协议**：MIT License
 

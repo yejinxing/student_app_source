@@ -119,6 +119,9 @@ jobs:
             dist/*.AppImage
             dist/*.deb
             dist/*.rpm
+            dist/*.blockmap
+            dist/*.yml
+            dist/*.yaml
           draft: false
           prerelease: false
           body_path: RELEASE_NOTES.md
