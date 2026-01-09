@@ -121,7 +121,7 @@ jobs:
             dist/*.rpm
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
         env:
           # 优先使用 PAT，如果没有则回退到 GITHUB_TOKEN
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
