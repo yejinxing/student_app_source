@@ -147,7 +147,7 @@ jobs:
           # 读取发布说明
           BODY=$(cat RELEASE_NOTES.md | jq -Rs .)
           
-          # 创建 Release
+          # 创建 Release（需要指定 target_commitish）
           RELEASE_RESPONSE=$(curl -s -X POST \
             "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases" \
             -H "Content-Type: application/json" \
@@ -156,7 +156,8 @@ jobs:
               \"tag_name\": \"${VERSION}\",
               \"name\": \"${VERSION}\",
               \"body\": ${BODY},
-              \"prerelease\": false
+              \"prerelease\": false,
+              \"target_commitish\": \"main\"
             }")
           
           echo "Gitee Release Response: $RELEASE_RESPONSE"
