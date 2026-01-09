@@ -147,10 +147,11 @@ jobs:
           # 读取发布说明并添加下载引导
           GITHUB_RELEASE_URL="https://github.com/yejinxing/student_app_source/releases/tag/${VERSION}"
           
-          # 在发布说明末尾添加下载引导（使用 heredoc 避免引号问题）
+          # 读取原始发布说明
           ORIGINAL_BODY=$(cat RELEASE_NOTES.md)
           
-          DOWNLOAD_NOTE=$(cat << 'HEREDOC'
+          # 构建下载说明（避免 heredoc 在 YAML 中的兼容性问题）
+          DOWNLOAD_NOTE="
 
 ---
 
@@ -160,10 +161,6 @@ jobs:
 
 1. 应用内更新：软件会自动使用镜像加速下载
 2. 手动下载：请访问 GitHub Release 页面
-HEREDOC
-)
-          # 添加 GitHub 链接
-          DOWNLOAD_NOTE="${DOWNLOAD_NOTE}
 
 GitHub Release: ${GITHUB_RELEASE_URL}"
           
