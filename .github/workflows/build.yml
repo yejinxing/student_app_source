@@ -126,14 +126,20 @@ jobs:
           # 优先使用 PAT，如果没有则回退到 GITHUB_TOKEN
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
-      # 同步发布到 Gitee
+      # 同步发布到 Gitee（可选，需要配置 GITEE_TOKEN）
       - name: Create Gitee Release
-        if: ${{ secrets.GITEE_TOKEN != '' }}
+        continue-on-error: true
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
           GITEE_OWNER: yejinxing
           GITEE_REPO: student_app_source
         run: |
+          # 检查 GITEE_TOKEN 是否存在
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "GITEE_TOKEN 未配置，跳过 Gitee 发布"
+            exit 0
+          fi
+          
           # 获取版本号
           VERSION=${GITHUB_REF#refs/tags/}
           echo "Creating Gitee release for $VERSION"
