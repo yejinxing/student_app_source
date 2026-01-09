@@ -144,8 +144,24 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           echo "Creating Gitee release for $VERSION"
           
-          # 读取发布说明
-          BODY=$(cat RELEASE_NOTES.md | jq -Rs .)
+          # 读取发布说明并添加下载引导
+          GITHUB_RELEASE_URL="https://github.com/yejinxing/student_app_source/releases/tag/${VERSION}"
+          
+          # 在发布说明末尾添加下载引导
+          ORIGINAL_BODY=$(cat RELEASE_NOTES.md)
+          DOWNLOAD_NOTE="
+
+---
+
+## 📥 下载说明
+
+由于 Gitee 文件大小限制，安装包请通过以下方式下载：
+
+1. **应用内更新**：软件会自动使用镜像加速下载
+2. **手动下载**：[GitHub Release 页面](${GITHUB_RELEASE_URL})
+"
+          FULL_BODY="${ORIGINAL_BODY}${DOWNLOAD_NOTE}"
+          BODY=$(echo "$FULL_BODY" | jq -Rs .)
           
           # 创建 Release（需要指定 target_commitish）
           RELEASE_RESPONSE=$(curl -s -X POST \
@@ -162,26 +178,14 @@ jobs:
           
           echo "Gitee Release Response: $RELEASE_RESPONSE"
           
-          # 获取 Release ID
+          # 检查是否成功
           RELEASE_ID=$(echo $RELEASE_RESPONSE | jq -r '.id')
           
           if [ "$RELEASE_ID" != "null" ] && [ -n "$RELEASE_ID" ]; then
-            echo "Gitee Release created with ID: $RELEASE_ID"
-            
-            # 上传文件到 Gitee Release
-            for file in dist/*.exe dist/*.dmg dist/*.zip dist/*.AppImage dist/*.deb dist/*.rpm; do
-              if [ -f "$file" ]; then
-                filename=$(basename "$file")
-                echo "Uploading $filename to Gitee..."
-                curl -s -X POST \
-                  "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${RELEASE_ID}/attach_files" \
-                  -H "Content-Type: multipart/form-data" \
-                  -F "access_token=${GITEE_TOKEN}" \
-                  -F "file=@${file}"
-                echo "Uploaded $filename"
-              fi
-            done
+            echo "✅ Gitee Release created successfully with ID: $RELEASE_ID"
+            echo "Gitee Release URL: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/tag/${VERSION}"
           else
-            echo "Failed to create Gitee release or release already exists"
+            echo "⚠️ Gitee Release creation failed or already exists"
+            echo "Response: $RELEASE_RESPONSE"
           fi
 

@@ -88,19 +88,32 @@ ipcMain.on('start-conversion', async (event, { excelPath }) => {
 const https = require('https');
 const http = require('http');
 
-// 更新源配置（Gitee 优先，GitHub 备用）
+// GitHub 镜像加速列表（国内访问加速）
+const GITHUB_MIRRORS = [
+    'https://mirror.ghproxy.com/',      // ghproxy 镜像
+    'https://ghproxy.net/',              // ghproxy.net
+    'https://gh-proxy.com/',             // gh-proxy
+    ''                                    // 直连（备用）
+];
+
+// 更新源配置
+// 策略：使用 Gitee API 检查更新（国内快），使用 GitHub 镜像下载文件（无大小限制）
 const UPDATE_SOURCES = [
     {
         name: 'Gitee',
         apiUrl: 'https://gitee.com/api/v5/repos/yejinxing/student_app_source/releases/latest',
-        downloadBase: 'https://gitee.com/yejinxing/student_app_source/releases/download/'
+        // Gitee 有 100MB 限制，下载仍指向 GitHub 镜像
+        useGitHubMirror: true
     },
     {
         name: 'GitHub',
         apiUrl: 'https://api.github.com/repos/yejinxing/student_app_source/releases/latest',
-        downloadBase: 'https://github.com/yejinxing/student_app_source/releases/download/'
+        useGitHubMirror: true
     }
 ];
+
+// GitHub Release 下载基础 URL
+const GITHUB_DOWNLOAD_BASE = 'https://github.com/yejinxing/student_app_source/releases/download/';
 
 let downloadPath = null;
 
@@ -221,6 +234,22 @@ function getPlatformAssetInfo() {
     }
 }
 
+// 获取带镜像加速的下载链接
+function getMirroredDownloadUrl(originalUrl) {
+    // 如果不是 GitHub 链接，直接返回
+    if (!originalUrl || !originalUrl.includes('github.com')) {
+        return originalUrl;
+    }
+    
+    // 尝试使用镜像（返回第一个可用的镜像 URL）
+    // 实际下载时会尝试多个镜像
+    const mirror = GITHUB_MIRRORS[0];
+    if (mirror) {
+        return mirror + originalUrl;
+    }
+    return originalUrl;
+}
+
 // 检查更新
 ipcMain.on('check-for-updates', async (event) => {
     const currentVersion = app.getVersion();
@@ -238,9 +267,22 @@ ipcMain.on('check-for-updates', async (event) => {
             const latestVersion = release.tag_name || release.name;
             
             if (compareVersion(latestVersion, currentVersion) > 0) {
-                // 找到对应平台的安装包
-                const assets = release.assets || [];
+                let assets = release.assets || [];
                 let targetAsset = null;
+                let downloadUrl = null;
+                
+                // 如果是 Gitee 源且没有安装包（因为 100MB 限制），从 GitHub 获取
+                if (source.name === 'Gitee' && assets.length === 0) {
+                    console.log('Gitee 无安装包，尝试从 GitHub 获取文件列表...');
+                    try {
+                        const githubRelease = await fetchJSON(
+                            'https://api.github.com/repos/yejinxing/student_app_source/releases/latest'
+                        );
+                        assets = githubRelease.assets || [];
+                    } catch (e) {
+                        console.log('GitHub API 请求失败，使用构造的下载链接');
+                    }
+                }
                 
                 // 按优先级顺序查找匹配的安装包
                 for (const pattern of platformInfo.patterns) {
@@ -248,7 +290,17 @@ ipcMain.on('check-for-updates', async (event) => {
                     if (targetAsset) break;
                 }
                 
+                // 构造下载链接
+                if (targetAsset) {
+                    downloadUrl = targetAsset.browser_download_url;
+                    // 使用镜像加速
+                    if (source.useGitHubMirror && downloadUrl) {
+                        downloadUrl = getMirroredDownloadUrl(downloadUrl);
+                    }
+                }
+                
                 console.log(`找到安装包: ${targetAsset ? targetAsset.name : '未找到'}`);
+                console.log(`下载链接: ${downloadUrl || '无'}`);
                 
                 event.reply('update-available', {
                     currentVersion: currentVersion,
@@ -256,10 +308,11 @@ ipcMain.on('check-for-updates', async (event) => {
                     releaseDate: release.published_at ? release.published_at.split('T')[0] : '未知',
                     releaseNotes: release.body || '暂无更新说明',
                     size: targetAsset ? formatSize(targetAsset.size) : '未知',
-                    downloadUrl: targetAsset ? targetAsset.browser_download_url : null,
+                    downloadUrl: downloadUrl,
                     fileName: targetAsset ? targetAsset.name : null,
                     platform: platformInfo.platformName,
-                    source: source.name
+                    source: source.name,
+                    mirrorUsed: source.useGitHubMirror ? '镜像加速' : '直连'
                 });
                 return;
             } else {
