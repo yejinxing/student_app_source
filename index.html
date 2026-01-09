@@ -1831,6 +1831,7 @@
                 <div class="update-meta">
                     <span>📅 <span id="update-date">2026-01-08</span></span>
                     <span>📦 <span id="update-size">--</span></span>
+                    <span>💻 <span id="update-platform">--</span></span>
                 </div>
                 <div class="update-notes">
                     <div class="update-notes-title">📝 更新内容</div>
@@ -2487,7 +2488,10 @@
             document.getElementById('update-current-version').textContent = 'v' + info.currentVersion;
             document.getElementById('update-date').textContent = info.releaseDate || '未知';
             document.getElementById('update-size').textContent = info.size || '未知';
+            document.getElementById('update-platform').textContent = info.platform || '当前平台';
             document.getElementById('update-notes').textContent = info.releaseNotes || '暂无更新说明';
+            console.log('更新信息:', info);
+            console.log('将下载文件:', info.fileName);
             showUpdateState('available');
         });
         

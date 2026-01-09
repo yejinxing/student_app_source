@@ -172,9 +172,61 @@ function formatSize(bytes) {
     return size.toFixed(1) + ' ' + units[unitIndex];
 }
 
+// 根据平台获取对应的安装包扩展名
+function getPlatformAssetInfo() {
+    const platform = process.platform;
+    const arch = process.arch;
+    
+    switch (platform) {
+        case 'win32':
+            // Windows: 优先 Setup 安装版，其次 Portable 便携版
+            return {
+                extensions: ['-Setup-', '.exe'],
+                patterns: [
+                    (name) => name.includes('-Setup-') && name.endsWith('.exe'),
+                    (name) => name.includes('-Portable-') && name.endsWith('.exe'),
+                    (name) => name.endsWith('.exe') && !name.includes('.blockmap')
+                ],
+                platformName: 'Windows'
+            };
+        case 'darwin':
+            // macOS: 根据架构选择 arm64 或 x64
+            const macArch = arch === 'arm64' ? 'arm64' : 'x64';
+            return {
+                extensions: ['.dmg'],
+                patterns: [
+                    (name) => name.includes(`-macOS-${macArch}`) && name.endsWith('.dmg'),
+                    (name) => name.includes('-macOS-') && name.endsWith('.dmg'),
+                    (name) => name.endsWith('.dmg')
+                ],
+                platformName: `macOS (${macArch})`
+            };
+        case 'linux':
+            // Linux: 优先 AppImage，其次 deb
+            return {
+                extensions: ['.AppImage', '.deb'],
+                patterns: [
+                    (name) => name.endsWith('.AppImage'),
+                    (name) => name.endsWith('.deb'),
+                    (name) => name.endsWith('.rpm')
+                ],
+                platformName: 'Linux'
+            };
+        default:
+            return {
+                extensions: ['.exe'],
+                patterns: [(name) => name.endsWith('.exe')],
+                platformName: '未知平台'
+            };
+    }
+}
+
 // 检查更新
 ipcMain.on('check-for-updates', async (event) => {
     const currentVersion = app.getVersion();
+    const platformInfo = getPlatformAssetInfo();
+    
+    console.log(`当前平台: ${platformInfo.platformName}, 架构: ${process.arch}`);
     
     // 依次尝试更新源
     for (const source of UPDATE_SOURCES) {
@@ -186,17 +238,27 @@ ipcMain.on('check-for-updates', async (event) => {
             const latestVersion = release.tag_name || release.name;
             
             if (compareVersion(latestVersion, currentVersion) > 0) {
-                // 找到安装包
+                // 找到对应平台的安装包
                 const assets = release.assets || [];
-                const exeAsset = assets.find(a => a.name && a.name.endsWith('.exe'));
+                let targetAsset = null;
+                
+                // 按优先级顺序查找匹配的安装包
+                for (const pattern of platformInfo.patterns) {
+                    targetAsset = assets.find(a => a.name && pattern(a.name));
+                    if (targetAsset) break;
+                }
+                
+                console.log(`找到安装包: ${targetAsset ? targetAsset.name : '未找到'}`);
                 
                 event.reply('update-available', {
                     currentVersion: currentVersion,
                     version: latestVersion.replace(/^v/, ''),
                     releaseDate: release.published_at ? release.published_at.split('T')[0] : '未知',
                     releaseNotes: release.body || '暂无更新说明',
-                    size: exeAsset ? formatSize(exeAsset.size) : '未知',
-                    downloadUrl: exeAsset ? exeAsset.browser_download_url : null,
+                    size: targetAsset ? formatSize(targetAsset.size) : '未知',
+                    downloadUrl: targetAsset ? targetAsset.browser_download_url : null,
+                    fileName: targetAsset ? targetAsset.name : null,
+                    platform: platformInfo.platformName,
                     source: source.name
                 });
                 return;

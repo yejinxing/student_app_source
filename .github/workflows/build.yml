@@ -109,7 +109,7 @@ jobs:
         run: ls -la dist/ || echo "No dist folder"
 
       # 创建 GitHub Release
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
@@ -125,4 +125,56 @@ jobs:
         env:
           # 优先使用 PAT，如果没有则回退到 GITHUB_TOKEN
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      # 同步发布到 Gitee
+      - name: Create Gitee Release
+        if: ${{ secrets.GITEE_TOKEN != '' }}
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: yejinxing
+          GITEE_REPO: student_app_source
+        run: |
+          # 获取版本号
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "Creating Gitee release for $VERSION"
+          
+          # 读取发布说明
+          BODY=$(cat RELEASE_NOTES.md | jq -Rs .)
+          
+          # 创建 Release
+          RELEASE_RESPONSE=$(curl -s -X POST \
+            "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"access_token\": \"${GITEE_TOKEN}\",
+              \"tag_name\": \"${VERSION}\",
+              \"name\": \"${VERSION}\",
+              \"body\": ${BODY},
+              \"prerelease\": false
+            }")
+          
+          echo "Gitee Release Response: $RELEASE_RESPONSE"
+          
+          # 获取 Release ID
+          RELEASE_ID=$(echo $RELEASE_RESPONSE | jq -r '.id')
+          
+          if [ "$RELEASE_ID" != "null" ] && [ -n "$RELEASE_ID" ]; then
+            echo "Gitee Release created with ID: $RELEASE_ID"
+            
+            # 上传文件到 Gitee Release
+            for file in dist/*.exe dist/*.dmg dist/*.zip dist/*.AppImage dist/*.deb dist/*.rpm; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                echo "Uploading $filename to Gitee..."
+                curl -s -X POST \
+                  "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${RELEASE_ID}/attach_files" \
+                  -H "Content-Type: multipart/form-data" \
+                  -F "access_token=${GITEE_TOKEN}" \
+                  -F "file=@${file}"
+                echo "Uploaded $filename"
+              fi
+            done
+          else
+            echo "Failed to create Gitee release or release already exists"
+          fi
 
