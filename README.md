@@ -1,8 +1,8 @@
-# 学生信息管理系统
+# 学生信息处理工具
 
 ## 🎯 项目概述
 
-学生信息管理系统是一个功能强大的桌面应用程序，旨在帮助学校、培训机构或企业高效管理学生信息。该系统提供了Excel转Word文档工具和考生照片重命名功能，支持多种图片格式转换，界面美观现代，操作简单直观。
+学生信息处理工具是一个功能强大的桌面应用程序，旨在帮助学校、培训机构或企业高效管理学生信息。该系统提供了Excel转Word文档工具和考生照片重命名功能，支持多种图片格式转换，界面美观现代，操作简单直观。
 
 ## ✨ 核心功能
 
@@ -106,10 +106,11 @@ npm run build
 student_app_source/
 ├── main.js                 # 主进程入口
 ├── index.html              # 主界面
-├── renderer.js             # 渲染进程
+├── converter.js            # Excel转Word功能
 ├── photoRenamer.js         # 照片重命名核心功能
-├── convertToWord.js        # Excel转Word功能
-├── test_format_processing.js # 测试脚本
+├── check_excel_fields.js   # Excel字段检查工具
+├── test_converter.js       # Excel转Word测试脚本
+├── test_photo_renamer.js   # 照片重命名测试脚本
 ├── package.json            # 项目配置
 ├── package-lock.json       # 依赖锁定文件
 ├── .gitignore              # Git忽略配置
@@ -157,4 +158,4 @@ MIT License - 查看 LICENSE 文件以获取详细信息
 
 ---
 
-**学生信息管理系统** - 让学生信息管理变得简单高效！
+**学生信息处理工具** - 让学生信息处理变得简单高效！

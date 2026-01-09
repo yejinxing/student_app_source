@@ -3,25 +3,19 @@ const fs = require('fs-extra');
 const path = require('path');
 const sharp = require('sharp');
 
-// 支持的图片格式
-const SUPPORTED_IMAGE_FORMATS = {
-    'jpg': 'jpeg',
-    'jpeg': 'jpeg',
-    'png': 'png',
-    'gif': 'gif',
-    'bmp': 'jpeg',
-    'tiff': 'jpeg',
-    'tif': 'jpeg',
-    'webp': 'jpeg'
-};
+// 支持的输入图片格式
+const SUPPORTED_INPUT_FORMATS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp'];
 
-// 输出格式映射
+// 输出格式映射（sharp 库格式名）
 const OUTPUT_FORMAT_MAP = {
     'keep': 'keep',
     'jpg': 'jpeg',
     'jpeg': 'jpeg',
     'png': 'png',
-    'gif': 'gif'
+    'gif': 'gif',
+    'webp': 'webp',
+    'tiff': 'tiff'
+    // 注意：bmp 不支持输出，sharp 库不支持
 };
 
 class PhotoRenamer {
@@ -118,7 +112,7 @@ class PhotoRenamer {
             
             allFiles.forEach(file => {
                 const fileExt = path.extname(file).toLowerCase();
-                if (Object.keys(SUPPORTED_IMAGE_FORMATS).includes(fileExt.substring(1))) {
+                if (SUPPORTED_INPUT_FORMATS.includes(fileExt.substring(1))) {
                     imageFiles.push(file);
                 }
             });

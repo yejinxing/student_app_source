@@ -2,8 +2,31 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>学生信息管理系统</title>
+    <title>学生信息处理工具</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --primary-dark: #4f46e5;
+            --accent: #f59e0b;
+            --bg-primary: #fafafa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f3f4f6;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --border: #e5e7eb;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+            --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.08), 0 10px 10px -5px rgba(0,0,0,0.03);
+            --radius-sm: 12px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-xl: 32px;
+        }
+        
         /* 全局样式 */
         * {
             margin: 0;
@@ -12,135 +35,282 @@
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             margin: 0;
             display: flex;
-            height: 100vh;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            color: #333;
+            flex-direction: column;
+            min-height: 100vh;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
         }
         
-        /* 侧边栏导航 */
+        /* 左侧边栏 */
         .sidebar {
-            width: 80px;
-            background: #2c3e50;
-            border-right: 1px solid #34495e;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            width: 72px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            padding: 30px 0;
-            transition: width 0.3s ease;
+            padding: 20px 12px;
+            z-index: 1000;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
-        .sidebar-item {
-            width: 100%;
-            padding: 20px 15px;
+        .sidebar.expanded {
+            width: 200px;
+        }
+        
+        /* 横跨边界的切换按钮 */
+        .sidebar-toggle {
+            position: absolute;
+            right: -14px;
+            top: 28px;
+            width: 28px;
+            height: 28px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            border-radius: 50%;
             cursor: pointer;
-            transition: all 0.3s ease;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 1001;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .sidebar-toggle:hover {
+            background: var(--bg-tertiary);
+            transform: scale(1.1);
+        }
+        
+        .sidebar-toggle svg {
+            width: 14px;
+            height: 14px;
+            color: var(--text-secondary);
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar.expanded .sidebar-toggle svg {
+            transform: rotate(180deg);
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-top: 48px;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 12px;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
+            overflow: hidden;
         }
         
-        .sidebar-item:hover {
-            background: #34495e;
+        .nav-item:hover {
+            background: var(--bg-tertiary);
         }
         
-        .sidebar-item.active {
-            background: #3498db;
-            position: relative;
+        .nav-item.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
         }
         
-        .sidebar-item.active::before {
-            content: '';
+        .nav-item .nav-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .nav-item .nav-icon svg {
+            width: 22px;
+            height: 22px;
+            color: var(--text-secondary);
+            transition: color 0.2s ease;
+        }
+        
+        .nav-item:hover .nav-icon svg {
+            color: var(--text-primary);
+        }
+        
+        .nav-item.active .nav-icon svg {
+            color: white;
+        }
+        
+        .nav-item .nav-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .sidebar.expanded .nav-item .nav-label {
+            opacity: 1;
+        }
+        
+        .nav-item:hover .nav-label {
+            color: var(--text-primary);
+        }
+        
+        .nav-item.active .nav-label {
+            color: white;
+        }
+        
+        .sidebar-footer {
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            margin-top: auto;
+        }
+        
+        /* 导航项提示气泡 */
+        .nav-item::after {
+            content: attr(title);
             position: absolute;
-            left: 0;
+            left: 100%;
             top: 50%;
             transform: translateY(-50%);
-            width: 4px;
-            height: 30px;
-            background: #fff;
-            border-radius: 0 4px 4px 0;
+            margin-left: 12px;
+            padding: 8px 12px;
+            background: var(--text-primary);
+            color: var(--bg-primary);
+            font-size: 12px;
+            font-weight: 500;
+            border-radius: var(--radius-sm);
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 1001;
         }
         
-        /* 图标样式 */
-        .sidebar-item::before {
-            font-size: 28px;
-            color: #bdc3c7;
-            transition: color 0.3s ease;
+        .nav-item::before {
+            content: '';
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 4px;
+            border: 6px solid transparent;
+            border-right-color: var(--text-primary);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 1001;
         }
         
-        .sidebar-item.active::before {
-            color: #fff;
+        .sidebar:not(.expanded) .nav-item:hover::after,
+        .sidebar:not(.expanded) .nav-item:hover::before {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* 隐藏底部导航 */
+        .bottom-nav {
+            display: none;
         }
         
         /* 主内容区域 */
         .content {
-            flex: 1;
-            padding: 40px;
-            overflow-y: auto;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            margin-left: 72px;
+            padding: 32px 48px 60px 48px;
+            min-height: 100vh;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .sidebar.expanded ~ .content {
+            margin-left: 200px;
+        }
+        
+        /* 内容容器 - 限制最大宽度但居中 */
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
         }
         
         /* 页面头部 */
         .page-header {
-            margin-bottom: 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #3498db;
+            margin-bottom: 32px;
+            padding: 0;
+            border: none;
         }
         
         .page-header h2 {
-            color: #2c3e50;
-            font-size: 32px;
+            color: var(--text-primary);
+            font-size: 28px;
             font-weight: 700;
-            margin: 0;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin: 0 0 8px 0;
+            letter-spacing: -0.5px;
+        }
+        
+        .page-header-subtitle {
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 400;
         }
         
         /* 卡片样式 */
         .card {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255,255,255,0.2);
+            background: var(--bg-secondary);
+            padding: 28px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            margin-bottom: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--border);
         }
         
         .card:hover {
-            box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+            box-shadow: var(--shadow-lg);
             transform: translateY(-2px);
         }
         
         /* 按钮样式 */
         .btn {
-            background: #3498db;
+            background: var(--primary);
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
+            padding: 14px 28px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-sm);
+            letter-spacing: 0.3px;
         }
         
         .btn:hover {
-            background: #2980b9;
-            box-shadow: 0 6px 18px rgba(52, 152, 219, 0.4);
-            transform: translateY(-2px);
+            background: var(--primary-dark);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
         }
         
         .btn:disabled {
-            background: #bdc3c7;
-            color: #7f8c8d;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
             cursor: not-allowed;
             box-shadow: none;
             transform: none;
@@ -148,160 +318,2030 @@
         
         /* 状态信息 */
         .status {
-            margin-top: 15px;
-            padding: 12px 16px;
-            border-radius: 6px;
+            margin-top: 16px;
+            padding: 14px 18px;
+            border-radius: var(--radius-sm);
             display: none;
             font-size: 14px;
+            font-weight: 500;
         }
         
         .success {
-            background: #d4edda;
-            color: #155724;
+            background: #ecfdf5;
+            color: #065f46;
             display: block;
-            border: 1px solid #c3e6cb;
+            border: 1px solid #a7f3d0;
         }
         
         .error {
-            background: #f8d7da;
-            color: #721c24;
+            background: #fef2f2;
+            color: #991b1b;
             display: block;
-            border: 1px solid #f5c6cb;
+            border: 1px solid #fecaca;
         }
         
         /* 文件路径显示 */
         #file-path {
-            margin: 15px 0;
-            color: #6c757d;
-            font-style: italic;
+            margin: 16px 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+            padding: 14px 16px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        
+        /* 设置页面样式 */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        
+        @media (max-width: 900px) {
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .settings-section {
+            margin-bottom: 16px;
+        }
+        
+        .settings-grid .settings-section {
+            margin-bottom: 0;
+        }
+        
+        .settings-section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .settings-section-header h3 {
+            margin: 0;
+            font-size: 16px;
+            color: var(--text-primary);
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+        
+        .settings-icon {
+            font-size: 20px;
+            margin-right: 12px;
+            opacity: 0.9;
+        }
+        
+        .settings-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 0;
+            border-bottom: 1px solid var(--bg-tertiary);
+        }
+        
+        .settings-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        
+        .settings-item-info {
+            flex: 1;
+            margin-right: 20px;
+        }
+        
+        .settings-item-title {
+            display: block;
             font-size: 14px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 6px;
-            border: 1px solid #dee2e6;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        
+        .settings-item-desc {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .settings-value {
+            font-size: 13px;
+            color: var(--primary);
+            font-weight: 600;
+            background: #eef2ff;
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+        }
+        
+        /* 开关样式 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-tertiary);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 28px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 50%;
+            box-shadow: var(--shadow-md);
+        }
+        
+        input:checked + .slider {
+            background-color: var(--primary);
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        
+        /* 设置页面下拉框 */
+        .settings-select {
+            padding: 10px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            min-width: 120px;
+            transition: all 0.3s ease;
+        }
+        
+        .settings-select:hover {
+            border-color: var(--primary-light);
+        }
+        
+        .settings-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        /* 设置页面范围滑块 */
+        .settings-range {
+            width: 140px;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        .settings-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: var(--shadow-md);
+            transition: transform 0.2s;
+        }
+        
+        .settings-range::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        
+        /* 次要按钮样式 */
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            box-shadow: none;
+            font-weight: 500;
+        }
+        
+        .btn-secondary:hover {
+            background: var(--border);
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        /* 危险按钮样式 */
+        .btn-danger {
+            background: #ef4444;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+            box-shadow: 0 6px 18px rgba(239, 68, 68, 0.35);
+        }
+        
+        /* 暗色主题 */
+        body.dark-theme {
+            --bg-primary: #0f0f0f;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #262626;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --border: #2a2a2a;
+        }
+        
+        body.dark-theme .sidebar {
+            background: var(--bg-secondary);
+            border-color: var(--border);
+        }
+        
+        body.dark-theme .sidebar-toggle {
+            background: var(--bg-secondary);
+            border-color: var(--border);
+        }
+        
+        body.dark-theme .sidebar-toggle:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        body.dark-theme .nav-item:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        body.dark-theme .sidebar-footer {
+            border-top-color: var(--border);
+        }
+        
+        body.dark-theme .card {
+            background: var(--bg-secondary);
+            border-color: var(--border);
+        }
+        
+        body.dark-theme .settings-value {
+            background: rgba(99, 102, 241, 0.15);
+        }
+        
+        body.dark-theme #file-path,
+        body.dark-theme #photo-rename-log,
+        body.dark-theme input[type="text"] {
+            background: var(--bg-tertiary);
+            border-color: var(--border);
+            color: var(--text-primary);
+        }
+        
+        /* 注意事项样式 */
+        .notice-section {
+            border-left: 4px solid var(--accent);
+            background: linear-gradient(135deg, #fffbeb 0%, var(--bg-secondary) 100%);
+        }
+        
+        body.dark-theme .notice-section {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, var(--bg-secondary) 100%);
+        }
+        
+        .notice-content {
+            padding: 8px 0;
+        }
+        
+        .notice-list {
+            margin: 0;
+            padding-left: 0;
+            list-style-type: none;
+        }
+        
+        .notice-list li {
+            display: flex;
+            align-items: baseline;
+            padding: 12px 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+        
+        .notice-dot {
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        
+        .notice-text {
+            flex: 1;
+        }
+        
+        .notice-list li strong {
+            color: #ef4444;
+            font-weight: 600;
+        }
+        
+        body.dark-theme .notice-list li strong {
+            color: #f87171;
+        }
+        
+        /* 输入框样式 */
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: inherit;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            background: var(--bg-secondary);
+        }
+        
+        select {
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: inherit;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        /* 进度条样式 */
+        #progress-container {
+            background: var(--bg-tertiary) !important;
+            border-radius: var(--radius-sm) !important;
+            overflow: hidden;
+        }
+        
+        #photo-rename-progress {
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%) !important;
+            border-radius: var(--radius-sm) !important;
+        }
+        
+        /* 日志区域 */
+        #photo-rename-log {
+            background: var(--bg-tertiary) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius-sm) !important;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        /* 表单组件样式 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .input-group input {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        /* 宽屏表单布局 */
+        @media (min-width: 900px) {
+            .form-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 20px;
+            }
+            
+            .form-grid .form-group {
+                margin-bottom: 0;
+            }
+            
+            .form-grid .form-group.full-width {
+                grid-column: 1 / -1;
+            }
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 16px;
+            align-items: flex-end;
+            margin-bottom: 20px;
+        }
+        
+        .form-row .form-group {
+            margin-bottom: 0;
+        }
+        
+        .form-row .form-group select {
+            width: 100%;
+            min-width: 140px;
+        }
+        
+        .form-arrow {
+            color: var(--text-muted);
+            font-size: 18px;
+            padding-bottom: 14px;
+            flex-shrink: 0;
+        }
+        
+        .field-select-group {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .field-select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+        
+        .field-select:hover {
+            border-color: var(--primary-light);
+        }
+        
+        .field-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        body.dark-theme .field-select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            margin: 24px 0;
+        }
+        
+        .progress-section {
+            margin: 20px 0;
+        }
+        
+        #progress-container {
+            height: 8px;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        
+        #photo-rename-progress {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        #progress-text {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .log-section {
+            margin-top: 24px;
+        }
+        
+        #photo-rename-log {
+            height: 180px;
+            overflow-y: auto;
+            padding: 14px;
+            margin-top: 8px;
+            line-height: 1.5;
+        }
+        
+        /* 主页样式 */
+        .home-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .home-app-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .home-header-text {
+            flex: 1;
+        }
+        
+        .home-header-text h2 {
+            margin-bottom: 4px;
+        }
+        
+        .welcome-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            border: none;
+        }
+        
+        .welcome-card h3 {
+            font-size: 20px;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        
+        .welcome-card p {
+            font-size: 14px;
+            opacity: 0.9;
+            line-height: 1.7;
+        }
+        
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .quick-action-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .quick-action-card:hover {
+            border-color: var(--primary-light);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+        
+        .quick-action-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .quick-action-icon svg {
+            width: 24px;
+            height: 24px;
+            color: white;
+        }
+        
+        .quick-action-info {
+            flex: 1;
+        }
+        
+        .quick-action-info h4 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        
+        .quick-action-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .quick-action-arrow {
+            font-size: 18px;
+            color: var(--text-muted);
+            transition: transform 0.3s ease;
+        }
+        
+        .quick-action-card:hover .quick-action-arrow {
+            transform: translateX(4px);
+            color: var(--primary);
+        }
+        
+        .info-card {
+            background: var(--bg-secondary);
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 24px;
+        }
+        
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .info-icon {
+            font-size: 24px;
+        }
+        
+        .info-content {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 2px;
+        }
+        
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* 大屏幕优化 */
+        @media (min-width: 1400px) {
+            .content {
+                padding: 40px 60px 60px 60px;
+            }
+            
+            .quick-actions {
+                grid-template-columns: repeat(3, 1fr);
+            }
         }
         
         /* 响应式设计 */
         @media (max-width: 768px) {
             .sidebar {
-                width: 100%;
-                height: auto;
-                flex-direction: row;
-                justify-content: space-around;
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                z-index: 1000;
-                padding: 10px 0;
+                width: 60px;
+                padding: 16px 8px;
+            }
+            
+            .sidebar.expanded {
+                width: 180px;
             }
             
             .content {
-                padding-bottom: 80px;
+                margin-left: 60px;
+                padding: 24px 16px 40px 16px;
+            }
+            
+            .sidebar.expanded ~ .content {
+                margin-left: 180px;
             }
             
             .page-header h2 {
-                font-size: 24px;
+                font-size: 22px;
             }
             
             .card {
-                padding: 16px;
+                padding: 20px;
+                border-radius: var(--radius-md);
+            }
+            
+            .settings-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            
+            .settings-item-info {
+                margin-right: 0;
+            }
+            
+            .nav-item {
+                padding: 12px 10px;
             }
         }
+        
+        /* 关于弹窗样式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(4px);
+            animation: fadeInOverlay 0.2s ease;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        @keyframes fadeInOverlay {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 520px;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            padding: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes slideUp {
+            from { 
+                opacity: 0; 
+                transform: translateY(20px) scale(0.95); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0) scale(1); 
+            }
+        }
+        
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: var(--bg-tertiary);
+            border-radius: 50%;
+            font-size: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .modal-close:hover {
+            background: var(--border);
+            color: var(--text-primary);
+        }
+        
+        .about-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .about-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: var(--radius-md);
+            margin-bottom: 12px;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .about-version {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        
+        .about-desc {
+            font-size: 15px;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        
+        .about-update-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 24px;
+        }
+        
+        .about-update-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--primary-light);
+        }
+        
+        .about-update-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+        
+        .about-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+        
+        .about-features {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+        
+        .about-feature-card {
+                padding: 16px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+        
+        .about-feature-card h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 8px 0;
+        }
+        
+        .about-feature-card p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        .about-developer {
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .about-dev-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .about-dev-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        
+        .about-dev-item:first-child {
+            padding-top: 0;
+        }
+        
+        .about-dev-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .about-dev-value {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        .about-dev-link {
+            font-size: 13px;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .about-dev-link:hover {
+            text-decoration: underline;
+        }
+        
+        .about-support {
+            background: linear-gradient(135deg, #fef3f2 0%, #fef9f8 50%, var(--bg-tertiary) 100%);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            border: 1px solid rgba(239, 68, 68, 0.15);
+        }
+        
+        body.dark-theme .about-support {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, var(--bg-tertiary) 100%);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+        
+        .support-text {
+            flex: 1;
+        }
+        
+        .support-text p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 0;
+            padding: 4px 0;
+            line-height: 1.6;
+        }
+        
+        .support-text p:first-child {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        .support-thanks {
+            margin-top: 8px !important;
+            font-size: 12px !important;
+            color: #ef4444 !important;
+            font-weight: 500 !important;
+        }
+        
+        body.dark-theme .support-thanks {
+            color: #f87171 !important;
+        }
+        
+        .support-qrcode {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .qrcode-img {
+            width: 120px;
+            height: 120px;
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-sm);
+            border: 2px solid white;
+        }
+        
+        body.dark-theme .qrcode-img {
+            border-color: var(--border);
+        }
+        
+        .qrcode-label {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            background: rgba(34, 197, 94, 0.1);
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: #16a34a;
+            font-weight: 500;
+        }
+        
+        body.dark-theme .qrcode-label {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+        }
+        
+        .about-notice {
+            background: linear-gradient(135deg, #fffbeb 0%, var(--bg-tertiary) 100%);
+            border-left: 4px solid var(--accent);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+        }
+        
+        body.dark-theme .about-notice {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, var(--bg-tertiary) 100%);
+        }
+        
+        /* 更新弹窗样式 */
+        .update-modal-content {
+            max-width: 420px;
+            text-align: center;
+        }
+        
+        .update-state {
+            padding: 20px 0;
+        }
+        
+        .update-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .update-status-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        .update-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+        
+        .update-icon svg {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .update-icon-success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+        }
+        
+        .update-icon-new {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+        }
+        
+        .update-icon-download {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+        
+        .update-icon-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+        
+        .update-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 8px 0;
+        }
+        
+        .update-desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin: 0 0 20px 0;
+        }
+        
+        .update-version-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .version-old {
+            font-size: 14px;
+            color: var(--text-tertiary);
+            text-decoration: line-through;
+        }
+        
+        .version-arrow {
+            color: var(--text-tertiary);
+        }
+        
+        .version-new {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        
+        .update-meta {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-bottom: 16px;
+        }
+        
+        .update-notes {
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        .update-notes-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+        
+        .update-notes-content {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .update-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        
+        .update-btn {
+            padding: 10px 24px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+        
+        .update-btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .update-btn-primary:hover {
+            background: var(--primary-dark);
+        }
+        
+        .update-btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .update-btn-secondary:hover {
+            background: var(--border);
+        }
+        
+        .update-progress-container {
+            margin: 20px 0;
+        }
+        
+        .update-progress-bar {
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .update-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .update-progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .update-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin: 0;
+        }
+        
+        .about-notice-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+        
+        .about-notice-list {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+        }
+        
+        .about-notice-list li {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            padding: 4px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+        
+        .about-notice-list li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+            font-weight: bold;
+        }
+        
+        .about-notice-list li strong {
+            color: #ef4444;
+            font-weight: 600;
+        }
+        
+        body.dark-theme .about-notice-list li strong {
+            color: #f87171;
+        }
+        
+        /* 动画效果 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .card {
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        .settings-section:nth-child(1) { animation-delay: 0s; }
+        .settings-section:nth-child(2) { animation-delay: 0.05s; }
+        .settings-section:nth-child(3) { animation-delay: 0.1s; }
+        .settings-section:nth-child(4) { animation-delay: 0.15s; }
+        .settings-section:nth-child(5) { animation-delay: 0.2s; }
+        .settings-section:nth-child(6) { animation-delay: 0.25s; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-            <div class="sidebar-item active" onclick="showPage('convert')" title="Excel 转 Word">📊</div>
-            <div class="sidebar-item" onclick="showPage('photo-rename')" title="照片重命名">📷</div>
-            <div class="sidebar-item" onclick="showPage('settings')" title="系统设置">⚙️</div>
-            <div class="sidebar-item" onclick="checkUpdate()" title="检查更新">🔄</div>
+    <!-- 左侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+        <!-- 横跨边界的切换按钮 -->
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="展开/收起">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        </button>
+        
+        <nav class="sidebar-nav">
+            <div class="nav-item active" onclick="showPage('home')" title="主页">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                </span>
+                <span class="nav-label">主页</span>
         </div>
-    <div class="content">
-        <div id="convert-page" class="card">
-            <div class="page-header">
-                <h2>Excel 转 Word 工具</h2>
+            <div class="nav-item" onclick="showPage('convert')" title="文档转换">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                </span>
+                <span class="nav-label">文档转换</span>
             </div>
-            <p>请选择包含学生信息的 Excel 文件，系统将按照预定格式生成 Word 文档。</p>
-            <button class="btn" onclick="selectFile()">选择 Excel 文件</button>
-            <div id="file-path">未选择文件</div>
-            <button id="convert-btn" class="btn" onclick="startConversion()" disabled>开始转换</button>
-            <div id="status" class="status"></div>
+            <div class="nav-item" onclick="showPage('photo-rename')" title="照片重命名">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </span>
+                <span class="nav-label">照片处理</span>
+            </div>
+        </nav>
+        
+        <div class="sidebar-footer">
+            <div class="nav-item" onclick="showPage('settings')" title="系统设置">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </span>
+                <span class="nav-label">设置</span>
+            </div>
+            <div class="nav-item" onclick="openAboutModal()" title="关于">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                </span>
+                <span class="nav-label">关于</span>
+            </div>
         </div>
-        <div id="photo-rename-page" class="card" style="display:none;">
-            <div class="page-header">
-                <h2>考生照片重命名工具</h2>
+    </aside>
+    
+    <!-- 关于弹窗 -->
+    <div class="modal-overlay" id="about-modal" onclick="closeAboutModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeAboutModal()">&times;</button>
+            
+            <div class="about-header">
+                <img src="assets/icon.png" alt="应用图标" class="about-icon">
+                <div class="about-version" id="about-app-version">v1.0.0</div>
+                <p class="about-desc">高效、便捷的学生数据处理工具</p>
             </div>
             
-            <!-- Excel文件选择与字段选择 -->
-            <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center;">
-                    <label style="width: 120px; font-size: 14px; font-weight: 500;">Excel文件路径:</label>
-                    <input type="text" id="photo-excel-path" readonly style="flex: 1; margin: 0 10px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: #f8f9fa; transition: all 0.3s ease;">
-                    <button class="btn" onclick="selectPhotoExcelFile()" style="padding: 10px 20px; font-size: 14px;">浏览...</button>
+            <div style="text-align: center;">
+                <button class="about-update-btn" onclick="checkUpdate()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <polyline points="1 20 1 14 7 14"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                    检查更新
+                </button>
+            </div>
+            
+            <div class="about-section-title">软件特点</div>
+            
+            <div class="about-features">
+                <div class="about-feature-card">
+                    <h4>🔒 数据安全</h4>
+                    <p>所有数据操作均在本地完成，不连接任何服务器，无需担心数据泄露。</p>
+                </div>
+                <div class="about-feature-card">
+                    <h4>📄 文档转换</h4>
+                    <p>支持将 Excel 学生信息表格快速转换为格式化的 Word 文档。</p>
+                </div>
+                <div class="about-feature-card">
+                    <h4>🖼️ 照片处理</h4>
+                    <p>批量重命名考生照片，支持多种格式转换。</p>
+                </div>
+                <div class="about-feature-card">
+                    <h4>💻 离线运行</h4>
+                    <p>除软件更新外，其余功能均可脱离网络单独运行。</p>
+                </div>
+            </div>
+            
+            <div class="about-section-title">开发者信息</div>
+            
+            <div class="about-developer">
+                <div class="about-dev-item">
+                    <span class="about-dev-label">开发者</span>
+                    <span class="about-dev-value">yejinxing</span>
+                </div>
+                <div class="about-dev-item">
+                    <span class="about-dev-label">GitHub</span>
+                    <a href="#" class="about-dev-link" onclick="openGitHub()">github.com/yejinxing</a>
+                </div>
+                <div class="about-dev-item">
+                    <span class="about-dev-label">邮箱</span>
+                    <span class="about-dev-value">yejinxing0728@qq.com</span>
+                </div>
+            </div>
+            
+            <div class="about-section-title">💖 支持开发者</div>
+            
+            <div class="about-support">
+                <div class="support-text">
+                    <p>🙏 开发不易，每一行代码都凝聚着心血~</p>
+                    <p>✨ 如果这个小工具帮助到您，觉得好用的话</p>
+                    <p>☕ 可以请作者喝杯咖啡，您的支持是我持续更新的动力！</p>
+                    <p class="support-thanks">🎉 感谢每一位支持者，爱你们哟~ ❤️</p>
+                </div>
+                <div class="support-qrcode">
+                    <img src="assets/wechat.png" alt="微信收款码" class="qrcode-img">
+                    <span class="qrcode-label">微信扫码打赏</span>
+                </div>
+            </div>
+            
+            <div class="about-notice">
+                <div class="about-notice-title">⚠️ 注意事项</div>
+                <ul class="about-notice-list">
+                    <li>本软件由开发者独立开发，仅供学习交流使用。</li>
+                    <li>本项目完全开源，<strong>无需付费</strong>，如有人收费请谨慎辨别。</li>
+                    <li>本软件<strong>不可直接用于商业用途</strong>，如需商用请联系开发者。</li>
+                    <li>使用本软件造成的任何问题，开发者不承担相关责任。</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 更新弹窗 -->
+    <div class="modal-overlay" id="update-modal" onclick="closeUpdateModal(event)">
+        <div class="modal-content update-modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeUpdateModal()">&times;</button>
+            
+            <!-- 检查中状态 -->
+            <div class="update-state" id="update-checking">
+                <div class="update-spinner"></div>
+                <p class="update-status-text">正在检查更新...</p>
+            </div>
+            
+            <!-- 已是最新版本 -->
+            <div class="update-state" id="update-latest" style="display: none;">
+                <div class="update-icon update-icon-success">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <h3 class="update-title">已是最新版本</h3>
+                <p class="update-desc">当前版本：<span id="update-current-version">v1.0.0</span></p>
+                <button class="update-btn update-btn-secondary" onclick="closeUpdateModal()">关闭</button>
+            </div>
+            
+            <!-- 发现新版本 -->
+            <div class="update-state" id="update-available" style="display: none;">
+                <div class="update-icon update-icon-new">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                </div>
+                <h3 class="update-title">发现新版本 🎉</h3>
+                <div class="update-version-info">
+                    <span class="version-old" id="update-old-ver">v1.0.0</span>
+                    <span class="version-arrow">→</span>
+                    <span class="version-new" id="update-new-ver">v1.0.1</span>
+                </div>
+                <div class="update-meta">
+                    <span>📅 <span id="update-date">2026-01-08</span></span>
+                    <span>📦 <span id="update-size">--</span></span>
+                </div>
+                <div class="update-notes">
+                    <div class="update-notes-title">📝 更新内容</div>
+                    <div class="update-notes-content" id="update-notes">
+                        加载中...
+                    </div>
+                </div>
+                <div class="update-actions">
+                    <button class="update-btn update-btn-secondary" onclick="closeUpdateModal()">稍后更新</button>
+                    <button class="update-btn update-btn-primary" onclick="startDownload()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:4px;">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        立即下载
+                    </button>
+                </div>
+                <p class="update-hint" style="margin-top: 12px;">
+                    或访问 <a href="#" onclick="openReleasePage()" style="color: var(--primary);">发布页面</a> 手动下载
+                </p>
+            </div>
+            
+            <!-- 下载中 -->
+            <div class="update-state" id="update-downloading" style="display: none;">
+                <div class="update-icon update-icon-download">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                </div>
+                <h3 class="update-title">正在下载更新</h3>
+                <div class="update-progress-container">
+                    <div class="update-progress-bar">
+                        <div class="update-progress-fill" id="update-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="update-progress-text">
+                        <span id="update-progress-percent">0%</span>
+                        <span id="update-progress-speed">-- KB/s</span>
+                    </div>
+                </div>
+                <p class="update-hint">下载完成后将自动提示安装</p>
+            </div>
+            
+            <!-- 下载完成 -->
+            <div class="update-state" id="update-downloaded" style="display: none;">
+                <div class="update-icon update-icon-success">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <h3 class="update-title">下载完成</h3>
+                <p class="update-desc">新版本已下载完成，是否立即安装？</p>
+                <div class="update-actions">
+                    <button class="update-btn update-btn-secondary" onclick="closeUpdateModal()">稍后安装</button>
+                    <button class="update-btn update-btn-primary" onclick="installUpdate()">立即安装</button>
+                </div>
+            </div>
+            
+            <!-- 检查失败 -->
+            <div class="update-state" id="update-error" style="display: none;">
+                <div class="update-icon update-icon-error">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="15" y1="9" x2="9" y2="15"/>
+                        <line x1="9" y1="9" x2="15" y2="15"/>
+                    </svg>
+                </div>
+                <h3 class="update-title">检查失败</h3>
+                <p class="update-desc" id="update-error-msg">网络连接失败，请检查网络后重试</p>
+                <div class="update-actions">
+                    <button class="update-btn update-btn-secondary" onclick="closeUpdateModal()">关闭</button>
+                    <button class="update-btn update-btn-primary" onclick="checkUpdate()">重试</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="content">
+        <!-- 主页 -->
+        <div id="home-page">
+            <div class="page-header home-header">
+                <img src="assets/icon.png" alt="应用图标" class="home-app-icon">
+                <div class="home-header-text">
+                    <h2>学生信息处理工具</h2>
+                    <p class="page-header-subtitle">高效、便捷的学生数据处理工具</p>
+                </div>
+            </div>
+            
+            <!-- 欢迎卡片 -->
+            <div class="card welcome-card">
+                <div class="welcome-content">
+                    <h3>👋 欢迎使用</h3>
+                    <p>本系统提供学生信息处理的常用工具，帮助您快速完成日常数据处理任务。所有数据均在本地处理，安全可靠。</p>
+                </div>
+            </div>
+            
+            <!-- 功能快捷入口 -->
+            <div class="quick-actions">
+                <div class="quick-action-card" onclick="showPageByName('convert')">
+                    <div class="quick-action-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                    </div>
+                    <div class="quick-action-info">
+                        <h4>文档转换</h4>
+                        <p>Excel 转 Word 格式</p>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
                 </div>
                 
-                <div style="display: flex; align-items: center;">
-                    <span style="width: 120px;"></span>
-                    <span style="margin: 0 10px; font-size: 14px; color: #6c757d;">将字段:</span>
-                    <select id="input-field-combo" style="width: 140px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: white; transition: all 0.3s ease;"></select>
-                    <span style="margin: 0 10px; font-size: 14px; color: #6c757d;">转为:</span>
-                    <select id="output-field-combo" style="width: 140px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: white; transition: all 0.3s ease;"></select>
+                <div class="quick-action-card" onclick="showPageByName('photo-rename')">
+                    <div class="quick-action-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                    </div>
+                    <div class="quick-action-info">
+                        <h4>照片处理</h4>
+                        <p>批量重命名考生照片</p>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
+                </div>
+                
+                <div class="quick-action-card" onclick="showPageByName('settings')">
+                    <div class="quick-action-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                    </div>
+                    <div class="quick-action-info">
+                        <h4>系统设置</h4>
+                        <p>自定义应用偏好</p>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
                 </div>
             </div>
             
-            <!-- 图片目录选择 -->
-            <div style="display: flex; align-items: center; margin-bottom: 15px;">
-                <label style="width: 120px; font-size: 14px; font-weight: 500;">原始图片目录:</label>
-                <input type="text" id="photo-folder-path" readonly style="flex: 1; margin: 0 10px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: #f8f9fa; transition: all 0.3s ease;">
-                <button class="btn" onclick="selectPhotoFolder()" style="padding: 10px 20px; font-size: 14px;">浏览...</button>
-            </div>
-            
-            <!-- 输出目录选择 -->
-            <div style="display: flex; align-items: center; margin-bottom: 15px;">
-                <label style="width: 120px; font-size: 14px; font-weight: 500;">输出目录:</label>
-                <input type="text" id="photo-output-path" readonly style="flex: 1; margin: 0 10px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: #f8f9fa; transition: all 0.3s ease;">
-                <button class="btn" onclick="selectPhotoOutputFolder()" style="padding: 10px 20px; font-size: 14px;">浏览...</button>
-            </div>
-            
-            <!-- 输出格式选择 -->
-            <div style="display: flex; align-items: center; margin-bottom: 20px;">
-                <label style="width: 120px; font-size: 14px; font-weight: 500;">输出格式:</label>
-                <select id="output-format-combo" style="flex: 1; margin: 0 10px; padding: 10px; border: 1px solid #e9ecef; border-radius: 6px; font-size: 14px; background-color: white; transition: all 0.3s ease;">
-                    <option value="keep">保持原格式</option>
-                    <option value="jpg">JPG格式</option>
-                    <option value="jpeg">JPEG格式</option>
-                    <option value="png">PNG格式</option>
-                    <option value="gif">GIF格式</option>
-                </select>
-            </div>
-            
-            <!-- 操作按钮 -->
-            <div style="display: flex; margin-bottom: 20px;">
-                <button id="photo-rename-btn" class="btn" onclick="startPhotoRenaming()" disabled style="background-color: #2196f3; color: white; font-weight: 600; padding: 12px 24px; font-size: 16px; border-radius: 8px; transition: all 0.3s ease;">开始处理</button>
-                <button id="stop-rename-btn" class="btn" onclick="stopPhotoRenaming()" disabled style="background-color: #f44336; color: white; margin-left: 10px; padding: 12px 24px; font-size: 16px; border-radius: 8px; transition: all 0.3s ease;">停止处理</button>
-            </div>
-            
-            <!-- 进度条 -->
-            <div style="margin-bottom: 20px;">
-                <div id="progress-container" style="width: 100%; height: 8px; border-radius: 4px; background-color: #e9ecef; overflow: hidden;">
-                    <div id="photo-rename-progress" style="height: 100%; width: 0%; background-color: #2196f3; transition: width 0.3s ease;"></div>
+            <!-- 系统信息 -->
+            <div class="card info-card">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-icon">📦</span>
+                        <div class="info-content">
+                            <span class="info-label">版本</span>
+                            <span class="info-value" id="home-version">v1.0.0</span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-icon">🔒</span>
+                        <div class="info-content">
+                            <span class="info-label">数据安全</span>
+                            <span class="info-value">本地存储</span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-icon">💻</span>
+                        <div class="info-content">
+                            <span class="info-label">运行环境</span>
+                            <span class="info-value" id="home-platform">Windows</span>
+                        </div>
+                    </div>
                 </div>
-                <div id="progress-text" style="text-align: center; margin-top: 8px; font-size: 14px; color: #6c757d;">等待开始...</div>
-            </div>
-            
-            <!-- 操作日志 -->
-            <div style="margin-top: 20px;">
-                <label style="font-size: 14px; font-weight: 500;">操作日志:</label>
-                <div id="photo-rename-log" style="height: 200px; overflow-y: auto; border: 1px solid #e9ecef; padding: 10px; margin-top: 10px; background-color: #f8f9fa; font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-radius: 6px;"></div>
             </div>
         </div>
         
-        <div id="settings-page" class="card" style="display:none;">
+        <div id="convert-page" style="display:none;">
+            <div class="page-header">
+                <h2>Excel 转 Word</h2>
+                <p class="page-header-subtitle">将学生信息表格转换为格式化文档</p>
+            </div>
+            <div class="card">
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                    选择包含学生信息的 Excel 文件，系统将按照预定格式自动生成 Word 文档。
+                </p>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <button class="btn" onclick="selectFile()">选择 Excel 文件</button>
+                    <button id="convert-btn" class="btn btn-secondary" onclick="startConversion()" disabled>开始转换</button>
+                </div>
+            <div id="file-path">未选择文件</div>
+            <div id="status" class="status"></div>
+        </div>
+        </div>
+        <div id="photo-rename-page" style="display:none;">
+            <div class="page-header">
+                <h2>照片重命名</h2>
+                <p class="page-header-subtitle">批量重命名考生照片文件</p>
+            </div>
+            <div class="card">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">Excel 文件</label>
+                        <div class="input-group">
+                            <input type="text" id="photo-excel-path" readonly placeholder="选择包含字段映射的 Excel 文件">
+                            <button class="btn btn-secondary" onclick="selectPhotoExcelFile()">浏览</button>
+                        </div>
+            </div>
+            
+                    <div class="form-group">
+                        <label class="form-label">源字段</label>
+                        <select id="input-field-combo" class="field-select"></select>
+                </div>
+                
+                    <div class="form-group">
+                        <label class="form-label">目标字段</label>
+                        <select id="output-field-combo" class="field-select"></select>
+            </div>
+            
+                    <div class="form-group full-width">
+                        <label class="form-label">原始图片目录</label>
+                        <div class="input-group">
+                            <input type="text" id="photo-folder-path" readonly placeholder="选择包含照片的文件夹">
+                            <button class="btn btn-secondary" onclick="selectPhotoFolder()">浏览</button>
+                        </div>
+            </div>
+            
+                    <div class="form-group full-width">
+                        <label class="form-label">输出目录</label>
+                        <div class="input-group">
+                            <input type="text" id="photo-output-path" readonly placeholder="选择输出文件夹">
+                            <button class="btn btn-secondary" onclick="selectPhotoOutputFolder()">浏览</button>
+                        </div>
+            </div>
+            
+                    <div class="form-group">
+                        <label class="form-label">输出格式</label>
+                        <select id="output-format-combo" class="field-select">
+                            <option value="keep">保持原格式</option>
+                            <option value="jpg">JPG 格式</option>
+                            <option value="jpeg">JPEG 格式</option>
+                            <option value="png">PNG 格式</option>
+                            <option value="gif">GIF 格式</option>
+                            <option value="webp">WebP 格式</option>
+                            <option value="tiff">TIFF 格式</option>
+                        </select>
+                    </div>
+            </div>
+            
+                <div class="form-actions">
+                    <button id="photo-rename-btn" class="btn" onclick="startPhotoRenaming()" disabled>开始处理</button>
+                    <button id="stop-rename-btn" class="btn btn-danger" onclick="stopPhotoRenaming()" disabled>停止</button>
+            </div>
+            
+                <div class="progress-section">
+                    <div id="progress-container">
+                        <div id="photo-rename-progress"></div>
+                </div>
+                    <div id="progress-text">等待开始...</div>
+            </div>
+            
+                <div class="log-section">
+                    <label class="form-label">操作日志</label>
+                    <div id="photo-rename-log"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="settings-page" style="display:none;">
+            <div class="page-header">
             <h2>系统设置</h2>
-            <p>应用版本: v1.0.0</p>
-            <p>存储位置: 本地数据库</p>
-            <p>安装目录: 自动识别</p>
+                <p class="page-header-subtitle">自定义应用程序偏好设置</p>
+            </div>
+            
+            <div class="settings-grid">
+            <!-- 通用设置 -->
+            <div class="card settings-section">
+                <div class="settings-section-header">
+                    <span class="settings-icon">🔧</span>
+                    <h3>通用设置</h3>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">开机自动启动</span>
+                        <span class="settings-item-desc">系统启动时自动运行本程序</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-autostart">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">关闭时最小化到托盘</span>
+                        <span class="settings-item-desc">点击关闭按钮时最小化到系统托盘而不是退出</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-minimize-to-tray">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">退出时确认</span>
+                        <span class="settings-item-desc">退出应用前显示确认对话框</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-confirm-exit" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- 外观设置 -->
+            <div class="card settings-section">
+                <div class="settings-section-header">
+                    <span class="settings-icon">🎨</span>
+                    <h3>外观设置</h3>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">主题模式</span>
+                        <span class="settings-item-desc">选择应用程序的外观主题</span>
+                    </div>
+                    <select id="setting-theme" class="settings-select">
+                        <option value="light">亮色模式</option>
+                        <option value="dark">暗色模式</option>
+                        <option value="system">跟随系统</option>
+                    </select>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">界面缩放</span>
+                        <span class="settings-item-desc">调整界面元素的大小比例</span>
+                    </div>
+                    <select id="setting-zoom" class="settings-select">
+                        <option value="0.8">80%</option>
+                        <option value="0.9">90%</option>
+                        <option value="1" selected>100%</option>
+                        <option value="1.1">110%</option>
+                        <option value="1.2">120%</option>
+                    </select>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">窗口透明度</span>
+                        <span class="settings-item-desc">调整窗口的不透明度 (<span id="opacity-value">100</span>%)</span>
+                    </div>
+                    <input type="range" id="setting-opacity" class="settings-range" min="70" max="100" value="100">
+                </div>
+            </div>
+            
+            <!-- 文件设置 -->
+            <div class="card settings-section">
+                <div class="settings-section-header">
+                    <span class="settings-icon">📁</span>
+                    <h3>文件设置</h3>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">默认输出目录</span>
+                        <span class="settings-item-desc" id="default-output-dir-display">与源文件相同目录</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="selectDefaultOutputDir()">选择目录</button>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">转换完成后打开文件夹</span>
+                        <span class="settings-item-desc">文件转换成功后自动打开输出目录</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-open-folder-after">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">保留转换历史记录</span>
+                        <span class="settings-item-desc">记录最近的文件转换操作</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-keep-history" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- 数据管理 -->
+            <div class="card settings-section">
+                <div class="settings-section-header">
+                    <span class="settings-icon">💾</span>
+                    <h3>数据管理</h3>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">缓存大小</span>
+                        <span class="settings-item-desc">当前缓存占用: <span id="cache-size">计算中...</span></span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="clearCache()">清理缓存</button>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">导出设置</span>
+                        <span class="settings-item-desc">将当前设置导出为配置文件</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="exportSettings()">导出</button>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">导入设置</span>
+                        <span class="settings-item-desc">从配置文件导入设置</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="importSettings()">导入</button>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">重置所有设置</span>
+                        <span class="settings-item-desc">将所有设置恢复为默认值</span>
+                    </div>
+                    <button class="btn btn-danger" onclick="resetSettings()">重置</button>
+                </div>
+            </div>
+            
+            <!-- 关于 -->
+            <div class="card settings-section">
+                <div class="settings-section-header">
+                    <span class="settings-icon">ℹ️</span>
+                    <h3>关于</h3>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">应用版本</span>
+                        <span class="settings-item-desc">学生信息处理工具</span>
+                    </div>
+                    <span class="settings-value" id="app-version">v1.0.0</span>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">Electron 版本</span>
+                        <span class="settings-item-desc">应用程序框架版本</span>
+                    </div>
+                    <span class="settings-value" id="electron-version">--</span>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">安装目录</span>
+                        <span class="settings-item-desc" id="install-path">加载中...</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="openInstallDir()">打开</button>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">检查更新</span>
+                        <span class="settings-item-desc">检查是否有新版本可用</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="checkUpdate()">检查更新</button>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">开源许可</span>
+                        <span class="settings-item-desc">查看第三方开源组件许可证</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="showLicenses()">查看</button>
+                </div>
+            </div>
+            </div>
+            
+            <!-- 开发者信息 -->
+            <div class="card settings-section">
+                <div class="settings-section-header">
+                    <span class="settings-icon">👨‍💻</span>
+                    <h3>开发者信息</h3>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">开发者</span>
+                        <span class="settings-item-desc">独立开发者</span>
+                    </div>
+                    <span class="settings-value">yejinxing</span>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">GitHub</span>
+                        <span class="settings-item-desc">开源代码仓库</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="openGitHub()">访问 GitHub</button>
+                </div>
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <span class="settings-item-title">联系邮箱</span>
+                        <span class="settings-item-desc">问题反馈与交流</span>
+                    </div>
+                    <span class="settings-value" style="font-size: 13px;">yejinxing0728@qq.com</span>
+                </div>
+            </div>
+            
+            <!-- 注意事项 -->
+            <div class="card settings-section notice-section">
+                <div class="settings-section-header">
+                    <span class="settings-icon">⚠️</span>
+                    <h3>注意事项</h3>
+                </div>
+                <div class="notice-content">
+                    <ul class="notice-list">
+                        <li><span class="notice-dot">•</span><span class="notice-text">本软件的所有数据操作和数据存储<strong>均在本地完成</strong>，不连接任何服务器，不进行账户登录和管理，<strong>无需担心数据泄露</strong>。<br>开发者声明：仅软件更新功能需要使用网络连接，其余功能均可脱离网络单独运行。</span></li>
+                        <li><span class="notice-dot">•</span><span class="notice-text">本软件由开发者 <strong>yejinxing</strong> 独立开发，仅供学习交流使用。</span></li>
+                        <li><span class="notice-dot">•</span><span class="notice-text">本项目完全开源，<strong>无需付费</strong>，如有人向您收费请谨慎辨别。</span></li>
+                        <li><span class="notice-dot">•</span><span class="notice-text">本软件<strong>不可直接用于商业用途</strong>，如需商用请联系开发者获取授权。</span></li>
+                        <li><span class="notice-dot">•</span><span class="notice-text">使用本软件造成的任何问题，开发者不承担相关责任。</span></li>
+                        <li><span class="notice-dot">•</span><span class="notice-text">欢迎提出建议和反馈，共同完善本软件。</span></li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -309,12 +2349,45 @@
         const { ipcRenderer } = require('electron');
         let selectedPath = '';
 
+        // 侧边栏切换
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('expanded');
+            localStorage.setItem('sidebarExpanded', sidebar.classList.contains('expanded'));
+        }
+        
+        // 初始化侧边栏状态
+        function initSidebar() {
+            const expanded = localStorage.getItem('sidebarExpanded') === 'true';
+            const sidebar = document.getElementById('sidebar');
+            if (expanded) {
+                sidebar.classList.add('expanded');
+            }
+        }
+
         function showPage(page) {
+            document.getElementById('home-page').style.display = page === 'home' ? 'block' : 'none';
             document.getElementById('convert-page').style.display = page === 'convert' ? 'block' : 'none';
             document.getElementById('photo-rename-page').style.display = page === 'photo-rename' ? 'block' : 'none';
             document.getElementById('settings-page').style.display = page === 'settings' ? 'block' : 'none';
-            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => el.classList.remove('active'));
+            if (event && event.currentTarget) {
             event.currentTarget.classList.add('active');
+            }
+        }
+        
+        // 通过页面名称显示页面（用于快捷入口）
+        function showPageByName(page) {
+            document.getElementById('home-page').style.display = page === 'home' ? 'block' : 'none';
+            document.getElementById('convert-page').style.display = page === 'convert' ? 'block' : 'none';
+            document.getElementById('photo-rename-page').style.display = page === 'photo-rename' ? 'block' : 'none';
+            document.getElementById('settings-page').style.display = page === 'settings' ? 'block' : 'none';
+            
+            // 更新侧边栏选中状态
+            const pageIndex = {'home': 0, 'convert': 1, 'photo-rename': 2, 'settings': 3};
+            document.querySelectorAll('.sidebar-nav .nav-item').forEach((el, index) => {
+                el.classList.toggle('active', index === pageIndex[page]);
+            });
         }
 
         function selectFile() {
@@ -354,10 +2427,109 @@
             document.getElementById('convert-btn').innerText = '开始转换';
         });
 
+        // ===== 更新功能 =====
+        let updateInfo = null;
+
         function checkUpdate() {
-            alert('正在检查更新...');
+            // 显示更新弹窗
+            openUpdateModal();
+            showUpdateState('checking');
             ipcRenderer.send('check-for-updates');
         }
+        
+        function openUpdateModal() {
+            document.getElementById('update-modal').classList.add('active');
+        }
+        
+        function closeUpdateModal(event) {
+            if (!event || event.target === event.currentTarget) {
+                document.getElementById('update-modal').classList.remove('active');
+            }
+        }
+        
+        function showUpdateState(state) {
+            const states = ['checking', 'latest', 'available', 'downloading', 'downloaded', 'error'];
+            states.forEach(s => {
+                const el = document.getElementById('update-' + s);
+                if (el) el.style.display = s === state ? 'block' : 'none';
+            });
+        }
+        
+        function startDownload() {
+            if (updateInfo && updateInfo.downloadUrl) {
+                // 直接打开下载链接
+                ipcRenderer.send('open-external-url', updateInfo.downloadUrl);
+                closeUpdateModal();
+            } else {
+                // 没有直接下载链接，打开发布页面
+                openReleasePage();
+            }
+        }
+        
+        function openReleasePage() {
+            // 优先打开 Gitee 发布页
+            ipcRenderer.send('open-external-url', 'https://gitee.com/yejinxing/student_app_source/releases');
+        }
+        
+        function installUpdate() {
+            ipcRenderer.send('install-update');
+        }
+        
+        // 更新状态监听
+        ipcRenderer.on('update-checking', () => {
+            showUpdateState('checking');
+        });
+        
+        ipcRenderer.on('update-available', (event, info) => {
+            updateInfo = info;
+            document.getElementById('update-old-ver').textContent = 'v' + info.currentVersion;
+            document.getElementById('update-new-ver').textContent = 'v' + info.version;
+            document.getElementById('update-current-version').textContent = 'v' + info.currentVersion;
+            document.getElementById('update-date').textContent = info.releaseDate || '未知';
+            document.getElementById('update-size').textContent = info.size || '未知';
+            document.getElementById('update-notes').textContent = info.releaseNotes || '暂无更新说明';
+            showUpdateState('available');
+        });
+        
+        ipcRenderer.on('update-not-available', (event, info) => {
+            document.getElementById('update-current-version').textContent = 'v' + info.currentVersion;
+            showUpdateState('latest');
+        });
+        
+        ipcRenderer.on('update-progress', (event, progress) => {
+            document.getElementById('update-progress-fill').style.width = progress.percent + '%';
+            document.getElementById('update-progress-percent').textContent = Math.round(progress.percent) + '%';
+            document.getElementById('update-progress-speed').textContent = progress.speed || '-- KB/s';
+        });
+        
+        ipcRenderer.on('update-downloaded', () => {
+            showUpdateState('downloaded');
+        });
+        
+        ipcRenderer.on('update-error', (event, error) => {
+            document.getElementById('update-error-msg').textContent = error || '检查更新失败，请稍后重试';
+            showUpdateState('error');
+        });
+        
+        // 关于弹窗
+        function openAboutModal() {
+            document.getElementById('about-modal').classList.add('active');
+            // 更新版本号
+            getAppInfo();
+        }
+        
+        function closeAboutModal(event) {
+            if (!event || event.target === event.currentTarget) {
+                document.getElementById('about-modal').classList.remove('active');
+            }
+        }
+        
+        // ESC 键关闭弹窗
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeAboutModal();
+            }
+        });
 
         // 照片重命名功能变量
         let photoFolderPath = '';
@@ -502,8 +2674,285 @@
             addLog(success ? '操作已完成!' : '操作失败!');
         });
         
-        ipcRenderer.on('update-status', (event, message) => {
-            alert(message);
+        
+        // ===== 系统设置功能 =====
+        
+        // 默认设置
+        const defaultSettings = {
+            autostart: false,
+            minimizeToTray: false,
+            confirmExit: true,
+            theme: 'light',
+            zoom: '1',
+            opacity: 100,
+            defaultOutputDir: '',
+            openFolderAfter: false,
+            keepHistory: true
+        };
+        
+        // 当前设置
+        let appSettings = { ...defaultSettings };
+        
+        // 加载设置
+        function loadSettings() {
+            try {
+                const saved = localStorage.getItem('appSettings');
+                if (saved) {
+                    appSettings = { ...defaultSettings, ...JSON.parse(saved) };
+                }
+            } catch (e) {
+                console.error('加载设置失败:', e);
+                appSettings = { ...defaultSettings };
+            }
+            applySettings();
+            updateSettingsUI();
+        }
+        
+        // 保存设置
+        function saveSettings() {
+            try {
+                localStorage.setItem('appSettings', JSON.stringify(appSettings));
+                ipcRenderer.send('save-settings', appSettings);
+            } catch (e) {
+                console.error('保存设置失败:', e);
+            }
+        }
+        
+        // 应用设置
+        function applySettings() {
+            // 应用主题
+            if (appSettings.theme === 'dark') {
+                document.body.classList.add('dark-theme');
+            } else if (appSettings.theme === 'light') {
+                document.body.classList.remove('dark-theme');
+            } else if (appSettings.theme === 'system') {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.body.classList.toggle('dark-theme', prefersDark);
+            }
+            
+            // 应用缩放
+            document.body.style.zoom = appSettings.zoom;
+            
+            // 应用透明度（需要 main 进程配合）
+            ipcRenderer.send('set-opacity', appSettings.opacity / 100);
+        }
+        
+        // 更新设置界面
+        function updateSettingsUI() {
+            document.getElementById('setting-autostart').checked = appSettings.autostart;
+            document.getElementById('setting-minimize-to-tray').checked = appSettings.minimizeToTray;
+            document.getElementById('setting-confirm-exit').checked = appSettings.confirmExit;
+            document.getElementById('setting-theme').value = appSettings.theme;
+            document.getElementById('setting-zoom').value = appSettings.zoom;
+            document.getElementById('setting-opacity').value = appSettings.opacity;
+            document.getElementById('opacity-value').textContent = appSettings.opacity;
+            document.getElementById('setting-open-folder-after').checked = appSettings.openFolderAfter;
+            document.getElementById('setting-keep-history').checked = appSettings.keepHistory;
+            
+            if (appSettings.defaultOutputDir) {
+                document.getElementById('default-output-dir-display').textContent = appSettings.defaultOutputDir;
+            }
+            
+            // 更新滑块背景
+            updateRangeBackground(document.getElementById('setting-opacity'));
+        }
+        
+        // 更新滑块背景色
+        function updateRangeBackground(range) {
+            const min = range.min || 0;
+            const max = range.max || 100;
+            const val = range.value;
+            const percentage = ((val - min) / (max - min)) * 100;
+            range.style.background = `linear-gradient(to right, #3498db 0%, #3498db ${percentage}%, #e9ecef ${percentage}%, #e9ecef 100%)`;
+        }
+        
+        // 绑定设置事件
+        function bindSettingsEvents() {
+            // 开机自启动
+            document.getElementById('setting-autostart').addEventListener('change', function() {
+                appSettings.autostart = this.checked;
+                saveSettings();
+                ipcRenderer.send('set-autostart', this.checked);
+            });
+            
+            // 最小化到托盘
+            document.getElementById('setting-minimize-to-tray').addEventListener('change', function() {
+                appSettings.minimizeToTray = this.checked;
+                saveSettings();
+            });
+            
+            // 退出确认
+            document.getElementById('setting-confirm-exit').addEventListener('change', function() {
+                appSettings.confirmExit = this.checked;
+                saveSettings();
+            });
+            
+            // 主题
+            document.getElementById('setting-theme').addEventListener('change', function() {
+                appSettings.theme = this.value;
+                saveSettings();
+                applySettings();
+            });
+            
+            // 缩放
+            document.getElementById('setting-zoom').addEventListener('change', function() {
+                appSettings.zoom = this.value;
+                saveSettings();
+                applySettings();
+            });
+            
+            // 透明度
+            document.getElementById('setting-opacity').addEventListener('input', function() {
+                appSettings.opacity = parseInt(this.value);
+                document.getElementById('opacity-value').textContent = this.value;
+                updateRangeBackground(this);
+                applySettings();
+            });
+            
+            document.getElementById('setting-opacity').addEventListener('change', function() {
+                saveSettings();
+            });
+            
+            // 转换后打开文件夹
+            document.getElementById('setting-open-folder-after').addEventListener('change', function() {
+                appSettings.openFolderAfter = this.checked;
+                saveSettings();
+            });
+            
+            // 保留历史记录
+            document.getElementById('setting-keep-history').addEventListener('change', function() {
+                appSettings.keepHistory = this.checked;
+                saveSettings();
+            });
+            
+            // 监听系统主题变化
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (appSettings.theme === 'system') {
+                    document.body.classList.toggle('dark-theme', e.matches);
+                }
+            });
+        }
+        
+        // 选择默认输出目录
+        function selectDefaultOutputDir() {
+            ipcRenderer.send('select-default-output-dir');
+        }
+        
+        ipcRenderer.on('selected-default-output-dir', (event, path) => {
+            appSettings.defaultOutputDir = path;
+            document.getElementById('default-output-dir-display').textContent = path || '与源文件相同目录';
+            saveSettings();
+        });
+        
+        // 清理缓存
+        function clearCache() {
+            if (confirm('确定要清理所有缓存数据吗？')) {
+                ipcRenderer.send('clear-cache');
+            }
+        }
+        
+        ipcRenderer.on('cache-cleared', (event, success) => {
+            if (success) {
+                alert('缓存已清理完成！');
+                getCacheSize();
+            } else {
+                alert('清理缓存失败！');
+            }
+        });
+        
+        // 获取缓存大小
+        function getCacheSize() {
+            ipcRenderer.send('get-cache-size');
+        }
+        
+        ipcRenderer.on('cache-size', (event, size) => {
+            document.getElementById('cache-size').textContent = size;
+        });
+        
+        // 导出设置
+        function exportSettings() {
+            ipcRenderer.send('export-settings', appSettings);
+        }
+        
+        ipcRenderer.on('settings-exported', (event, success, path) => {
+            if (success) {
+                alert(`设置已导出到: ${path}`);
+            } else {
+                alert('导出设置失败！');
+            }
+        });
+        
+        // 导入设置
+        function importSettings() {
+            ipcRenderer.send('import-settings');
+        }
+        
+        ipcRenderer.on('settings-imported', (event, settings) => {
+            if (settings) {
+                appSettings = { ...defaultSettings, ...settings };
+                saveSettings();
+                applySettings();
+                updateSettingsUI();
+                alert('设置导入成功！');
+            }
+        });
+        
+        // 重置设置
+        function resetSettings() {
+            if (confirm('确定要将所有设置恢复为默认值吗？此操作无法撤销。')) {
+                appSettings = { ...defaultSettings };
+                saveSettings();
+                applySettings();
+                updateSettingsUI();
+                ipcRenderer.send('reset-settings');
+                alert('设置已重置为默认值！');
+            }
+        }
+        
+        // 打开安装目录
+        function openInstallDir() {
+            ipcRenderer.send('open-install-dir');
+        }
+        
+        // 显示许可证
+        function showLicenses() {
+            ipcRenderer.send('show-licenses');
+        }
+        
+        // 打开GitHub页面
+        function openGitHub() {
+            ipcRenderer.send('open-external-url', 'https://github.com/yejinxing/');
+        }
+        
+        // 获取应用信息
+        function getAppInfo() {
+            ipcRenderer.send('get-app-info');
+        }
+        
+        ipcRenderer.on('app-info', (event, info) => {
+            document.getElementById('app-version').textContent = `v${info.version}`;
+            document.getElementById('electron-version').textContent = info.electronVersion;
+            document.getElementById('install-path').textContent = info.installPath;
+            // 更新主页版本信息
+            if (document.getElementById('home-version')) {
+                document.getElementById('home-version').textContent = `v${info.version}`;
+            }
+            if (document.getElementById('home-platform')) {
+                document.getElementById('home-platform').textContent = process.platform === 'win32' ? 'Windows' : process.platform;
+            }
+            // 更新关于弹窗版本信息
+            if (document.getElementById('about-app-version')) {
+                document.getElementById('about-app-version').textContent = `v${info.version}`;
+            }
+        });
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initSidebar();
+            loadSettings();
+            bindSettingsEvents();
+            getAppInfo();
+            getCacheSize();
         });
     </script>
 </body>

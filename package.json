@@ -1,27 +1,94 @@
 {
   "name": "student_app",
   "version": "1.0.0",
+  "description": "学生信息处理工具 - 高效便捷的学生数据处理工具",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "test": "echo \"No tests configured\""
   },
   "build": {
     "appId": "com.student.app",
-    "productName": "学生信息管理系统",
+    "productName": "学生信息处理工具",
+    "icon": "assets/icon.png",
+    "files": [
+      "main.js",
+      "index.html",
+      "icon.png",
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "${productName}-${version}-Windows-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.education",
+      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "artifactName": "${productName}-${version}-Linux-${arch}.${ext}"
     }
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": [
+    "electron",
+    "student",
+    "excel",
+    "word",
+    "photo-renamer"
+  ],
+  "author": "yejinxing <yejinxing0728@qq.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yejinxing/student_app_source.git"
+  },
   "devDependencies": {
     "electron": "^39.2.7",
     "electron-builder": "^26.4.0"
