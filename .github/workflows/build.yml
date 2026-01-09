@@ -6,6 +6,11 @@ on:
       - 'v*'  # 当推送 v 开头的 tag 时触发，如 v1.0.0
   workflow_dispatch:  # 允许手动触发
 
+# 顶层权限声明 - 确保整个工作流有写入权限
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   build:
     strategy:
@@ -118,5 +123,6 @@ jobs:
           prerelease: false
           generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 优先使用 PAT，如果没有则回退到 GITHUB_TOKEN
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
