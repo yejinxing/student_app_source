@@ -88,32 +88,33 @@ ipcMain.on('start-conversion', async (event, { excelPath }) => {
 const https = require('https');
 const http = require('http');
 
-// GitHub 镜像加速列表（国内访问加速）
+// 仓库信息
+const REPO_OWNER = 'yejinxing';
+const REPO_NAME = 'student_app_source';
+
+// GitHub 镜像加速列表（按优先级排序）
 const GITHUB_MIRRORS = [
-    'https://mirror.ghproxy.com/',      // ghproxy 镜像
-    'https://ghproxy.net/',              // ghproxy.net
-    'https://gh-proxy.com/',             // gh-proxy
-    ''                                    // 直连（备用）
+    { name: 'ghproxy', prefix: 'https://mirror.ghproxy.com/' },
+    { name: 'ghproxy.net', prefix: 'https://ghproxy.net/' },
+    { name: 'gh-proxy', prefix: 'https://gh-proxy.com/' },
+    { name: '直连', prefix: '' }
 ];
 
-// 更新源配置
-// 策略：使用 Gitee API 检查更新（国内快），使用 GitHub 镜像下载文件（无大小限制）
-const UPDATE_SOURCES = [
-    {
-        name: 'Gitee',
-        apiUrl: 'https://gitee.com/api/v5/repos/yejinxing/student_app_source/releases/latest',
-        // Gitee 有 100MB 限制，下载仍指向 GitHub 镜像
-        useGitHubMirror: true
-    },
-    {
-        name: 'GitHub',
-        apiUrl: 'https://api.github.com/repos/yejinxing/student_app_source/releases/latest',
-        useGitHubMirror: true
-    }
-];
+// API 端点
+const API_ENDPOINTS = {
+    // Gitee Tags API（用于检查版本，国内访问快）
+    giteeTags: `https://gitee.com/api/v5/repos/${REPO_OWNER}/${REPO_NAME}/tags`,
+    // GitHub Release API（用于获取安装包信息）
+    githubRelease: `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`,
+    githubReleaseByTag: (tag) => `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/tags/${tag}`
+};
 
-// GitHub Release 下载基础 URL
-const GITHUB_DOWNLOAD_BASE = 'https://github.com/yejinxing/student_app_source/releases/download/';
+// 下载状态管理
+let currentDownload = {
+    path: null,
+    controller: null,
+    inProgress: false
+};
 
 let downloadPath = null;
 
@@ -234,116 +235,322 @@ function getPlatformAssetInfo() {
     }
 }
 
-// 获取带镜像加速的下载链接
-function getMirroredDownloadUrl(originalUrl) {
-    // 如果不是 GitHub 链接，直接返回
-    if (!originalUrl || !originalUrl.includes('github.com')) {
-        return originalUrl;
-    }
-    
-    // 尝试使用镜像（返回第一个可用的镜像 URL）
-    // 实际下载时会尝试多个镜像
-    const mirror = GITHUB_MIRRORS[0];
-    if (mirror) {
-        return mirror + originalUrl;
-    }
-    return originalUrl;
-}
-
-// 检查更新
+// 检查更新（使用 Gitee Tags API）
 ipcMain.on('check-for-updates', async (event) => {
     const currentVersion = app.getVersion();
     const platformInfo = getPlatformAssetInfo();
     
     console.log(`当前平台: ${platformInfo.platformName}, 架构: ${process.arch}`);
+    console.log(`当前版本: v${currentVersion}`);
     
-    // 依次尝试更新源
-    for (const source of UPDATE_SOURCES) {
+    try {
+        // 步骤1: 从 Gitee Tags API 获取最新版本
+        console.log('正在从 Gitee 检查版本...');
+        let latestVersion = null;
+        let releaseInfo = null;
+        
         try {
-            console.log(`正在从 ${source.name} 检查更新...`);
-            const release = await fetchJSON(source.apiUrl);
-            
-            // 解析版本信息
-            const latestVersion = release.tag_name || release.name;
-            
-            if (compareVersion(latestVersion, currentVersion) > 0) {
-                let assets = release.assets || [];
-                let targetAsset = null;
-                let downloadUrl = null;
-                
-                // 如果是 Gitee 源且没有安装包（因为 100MB 限制），从 GitHub 获取
-                if (source.name === 'Gitee' && assets.length === 0) {
-                    console.log('Gitee 无安装包，尝试从 GitHub 获取文件列表...');
-                    try {
-                        const githubRelease = await fetchJSON(
-                            'https://api.github.com/repos/yejinxing/student_app_source/releases/latest'
-                        );
-                        assets = githubRelease.assets || [];
-                    } catch (e) {
-                        console.log('GitHub API 请求失败，使用构造的下载链接');
-                    }
+            const tags = await fetchJSON(API_ENDPOINTS.giteeTags);
+            if (tags && tags.length > 0) {
+                // 找到最新的版本标签（以 v 开头的）
+                const versionTags = tags.filter(t => t.name && t.name.startsWith('v'));
+                if (versionTags.length > 0) {
+                    // 按版本号排序，取最新的
+                    versionTags.sort((a, b) => compareVersion(b.name, a.name));
+                    latestVersion = versionTags[0].name;
+                    console.log(`Gitee 最新版本: ${latestVersion}`);
                 }
-                
-                // 按优先级顺序查找匹配的安装包
-                for (const pattern of platformInfo.patterns) {
-                    targetAsset = assets.find(a => a.name && pattern(a.name));
-                    if (targetAsset) break;
-                }
-                
-                // 构造下载链接
-                if (targetAsset) {
-                    downloadUrl = targetAsset.browser_download_url;
-                    // 使用镜像加速
-                    if (source.useGitHubMirror && downloadUrl) {
-                        downloadUrl = getMirroredDownloadUrl(downloadUrl);
-                    }
-                }
-                
-                console.log(`找到安装包: ${targetAsset ? targetAsset.name : '未找到'}`);
-                console.log(`下载链接: ${downloadUrl || '无'}`);
-                
-                event.reply('update-available', {
-                    currentVersion: currentVersion,
-                    version: latestVersion.replace(/^v/, ''),
-                    releaseDate: release.published_at ? release.published_at.split('T')[0] : '未知',
-                    releaseNotes: release.body || '暂无更新说明',
-                    size: targetAsset ? formatSize(targetAsset.size) : '未知',
-                    downloadUrl: downloadUrl,
-                    fileName: targetAsset ? targetAsset.name : null,
-                    platform: platformInfo.platformName,
-                    source: source.name,
-                    mirrorUsed: source.useGitHubMirror ? '镜像加速' : '直连'
-                });
-                return;
-            } else {
-                event.reply('update-not-available', {
-                    currentVersion: currentVersion
-                });
+            }
+        } catch (e) {
+            console.log('Gitee Tags API 失败:', e.message);
+        }
+        
+        // 如果 Gitee 失败，尝试从 GitHub 获取
+        if (!latestVersion) {
+            console.log('尝试从 GitHub 获取版本信息...');
+            try {
+                releaseInfo = await fetchJSON(API_ENDPOINTS.githubRelease);
+                latestVersion = releaseInfo.tag_name;
+                console.log(`GitHub 最新版本: ${latestVersion}`);
+            } catch (e) {
+                console.log('GitHub API 也失败:', e.message);
+                event.reply('update-error', '无法连接到更新服务器，请检查网络连接');
                 return;
             }
-        } catch (error) {
-            console.log(`${source.name} 检查失败:`, error.message);
-            continue;
         }
+        
+        // 步骤2: 比较版本
+        if (compareVersion(latestVersion, currentVersion) <= 0) {
+            console.log('当前已是最新版本');
+            event.reply('update-not-available', { currentVersion });
+            return;
+        }
+        
+        console.log(`发现新版本: ${latestVersion}`);
+        
+        // 步骤3: 从 GitHub 获取 Release 详细信息和安装包
+        if (!releaseInfo) {
+            try {
+                releaseInfo = await fetchJSON(API_ENDPOINTS.githubReleaseByTag(latestVersion));
+            } catch (e) {
+                console.log('获取 Release 详情失败:', e.message);
+            }
+        }
+        
+        // 步骤4: 查找对应平台的安装包
+        let targetAsset = null;
+        let downloadUrl = null;
+        
+        if (releaseInfo && releaseInfo.assets) {
+            for (const pattern of platformInfo.patterns) {
+                targetAsset = releaseInfo.assets.find(a => a.name && pattern(a.name));
+                if (targetAsset) break;
+            }
+        }
+        
+        if (targetAsset) {
+            downloadUrl = targetAsset.browser_download_url;
+            console.log(`找到安装包: ${targetAsset.name}`);
+        } else {
+            // 如果找不到，构造下载链接（基于命名规则）
+            const fileName = constructFileName(latestVersion, platformInfo);
+            downloadUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${latestVersion}/${fileName}`;
+            console.log(`构造下载链接: ${downloadUrl}`);
+        }
+        
+        event.reply('update-available', {
+            currentVersion: currentVersion,
+            version: latestVersion.replace(/^v/, ''),
+            releaseDate: releaseInfo?.published_at ? releaseInfo.published_at.split('T')[0] : '未知',
+            releaseNotes: releaseInfo?.body || '暂无更新说明',
+            size: targetAsset ? formatSize(targetAsset.size) : '未知',
+            downloadUrl: downloadUrl,
+            fileName: targetAsset?.name || constructFileName(latestVersion, platformInfo),
+            platform: platformInfo.platformName
+        });
+        
+    } catch (error) {
+        console.error('检查更新出错:', error);
+        event.reply('update-error', `检查更新失败: ${error.message}`);
     }
-    
-    // 所有源都失败
-    event.reply('update-error', '无法连接到更新服务器，请检查网络连接');
 });
 
-// 下载更新
-ipcMain.on('download-update', async (event) => {
-    // 这里可以实现下载逻辑，但由于浏览器下载更简单可靠，
-    // 我们直接打开下载链接让用户手动下载
-    event.reply('update-error', '请从 Gitee 或 GitHub 发布页面手动下载最新版本');
+// 根据版本和平台构造文件名
+function constructFileName(version, platformInfo) {
+    const ver = version.replace(/^v/, '');
+    switch (process.platform) {
+        case 'win32':
+            return `StudentInfoTool-Setup-${ver}.exe`;
+        case 'darwin':
+            const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+            return `StudentInfoTool-${ver}-macOS-${arch}.dmg`;
+        case 'linux':
+            return `StudentInfoTool-${ver}-Linux-x86_64.AppImage`;
+        default:
+            return `StudentInfoTool-Setup-${ver}.exe`;
+    }
+}
+
+// 下载文件（带镜像重试和进度显示）
+async function downloadFile(url, destPath, event, mirrorIndex = 0) {
+    return new Promise((resolve, reject) => {
+        // 应用镜像加速
+        let downloadUrl = url;
+        if (mirrorIndex < GITHUB_MIRRORS.length && url.includes('github.com')) {
+            const mirror = GITHUB_MIRRORS[mirrorIndex];
+            downloadUrl = mirror.prefix + url;
+            console.log(`使用镜像 [${mirror.name}]: ${downloadUrl}`);
+        }
+        
+        const client = downloadUrl.startsWith('https') ? https : http;
+        
+        const request = client.get(downloadUrl, {
+            headers: { 'User-Agent': 'StudentApp/' + app.getVersion() },
+            timeout: 30000
+        }, (response) => {
+            // 处理重定向
+            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                console.log('重定向到:', response.headers.location);
+                downloadFile(response.headers.location, destPath, event, mirrorIndex)
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+            
+            if (response.statusCode !== 200) {
+                // 当前镜像失败，尝试下一个
+                if (mirrorIndex < GITHUB_MIRRORS.length - 1) {
+                    console.log(`镜像 ${GITHUB_MIRRORS[mirrorIndex].name} 失败 (${response.statusCode})，尝试下一个...`);
+                    downloadFile(url, destPath, event, mirrorIndex + 1)
+                        .then(resolve)
+                        .catch(reject);
+                    return;
+                }
+                reject(new Error(`下载失败: HTTP ${response.statusCode}`));
+                return;
+            }
+            
+            const totalSize = parseInt(response.headers['content-length'], 10) || 0;
+            let downloadedSize = 0;
+            const startTime = Date.now();
+            
+            const fileStream = fs.createWriteStream(destPath);
+            currentDownload.path = destPath;
+            
+            response.on('data', (chunk) => {
+                downloadedSize += chunk.length;
+                
+                // 计算进度和速度
+                const percent = totalSize > 0 ? (downloadedSize / totalSize * 100) : 0;
+                const elapsed = (Date.now() - startTime) / 1000;
+                const speed = elapsed > 0 ? downloadedSize / elapsed : 0;
+                const speedText = formatSize(speed) + '/s';
+                const remaining = speed > 0 ? Math.round((totalSize - downloadedSize) / speed) : 0;
+                
+                event.reply('update-progress', {
+                    percent: Math.round(percent * 10) / 10,
+                    downloaded: formatSize(downloadedSize),
+                    total: formatSize(totalSize),
+                    speed: speedText,
+                    remaining: remaining > 60 ? `${Math.round(remaining / 60)}分钟` : `${remaining}秒`,
+                    mirror: GITHUB_MIRRORS[mirrorIndex].name
+                });
+            });
+            
+            response.pipe(fileStream);
+            
+            fileStream.on('finish', () => {
+                fileStream.close();
+                console.log('下载完成:', destPath);
+                resolve(destPath);
+            });
+            
+            fileStream.on('error', (err) => {
+                fs.unlink(destPath, () => {});
+                reject(err);
+            });
+        });
+        
+        request.on('error', (err) => {
+            // 当前镜像失败，尝试下一个
+            if (mirrorIndex < GITHUB_MIRRORS.length - 1) {
+                console.log(`镜像 ${GITHUB_MIRRORS[mirrorIndex].name} 连接失败，尝试下一个...`);
+                downloadFile(url, destPath, event, mirrorIndex + 1)
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+            reject(err);
+        });
+        
+        request.on('timeout', () => {
+            request.destroy();
+            // 超时也尝试下一个镜像
+            if (mirrorIndex < GITHUB_MIRRORS.length - 1) {
+                console.log(`镜像 ${GITHUB_MIRRORS[mirrorIndex].name} 超时，尝试下一个...`);
+                downloadFile(url, destPath, event, mirrorIndex + 1)
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+            reject(new Error('下载超时'));
+        });
+    });
+}
+
+// 开始下载更新
+ipcMain.on('download-update', async (event, updateInfo) => {
+    if (currentDownload.inProgress) {
+        event.reply('update-error', '已有下载任务在进行中');
+        return;
+    }
+    
+    currentDownload.inProgress = true;
+    
+    try {
+        const downloadUrl = updateInfo.downloadUrl;
+        const fileName = updateInfo.fileName || 'update-installer.exe';
+        
+        // 下载到临时目录
+        const tempDir = app.getPath('temp');
+        const destPath = path.join(tempDir, fileName);
+        
+        console.log('开始下载:', downloadUrl);
+        console.log('保存到:', destPath);
+        
+        event.reply('update-downloading');
+        
+        await downloadFile(downloadUrl, destPath, event);
+        
+        currentDownload.path = destPath;
+        currentDownload.inProgress = false;
+        
+        event.reply('update-downloaded', {
+            filePath: destPath,
+            fileName: fileName
+        });
+        
+    } catch (error) {
+        console.error('下载失败:', error);
+        currentDownload.inProgress = false;
+        event.reply('update-error', `下载失败: ${error.message}`);
+    }
 });
 
 // 安装更新
 ipcMain.on('install-update', (event) => {
-    if (downloadPath && fs.existsSync(downloadPath)) {
-        shell.openPath(downloadPath);
-        app.quit();
+    const installerPath = currentDownload.path;
+    
+    if (!installerPath || !fs.existsSync(installerPath)) {
+        event.reply('update-error', '安装包不存在，请重新下载');
+        return;
     }
+    
+    console.log('启动安装程序:', installerPath);
+    
+    // 根据平台执行安装
+    const platform = process.platform;
+    
+    try {
+        if (platform === 'win32') {
+            // Windows: 直接运行 exe 安装程序
+            const { spawn } = require('child_process');
+            spawn(installerPath, [], {
+                detached: true,
+                stdio: 'ignore'
+            }).unref();
+        } else if (platform === 'darwin') {
+            // macOS: 打开 dmg 文件
+            shell.openPath(installerPath);
+        } else {
+            // Linux: 根据文件类型处理
+            if (installerPath.endsWith('.AppImage')) {
+                // 设置可执行权限并运行
+                fs.chmodSync(installerPath, '755');
+                shell.openPath(installerPath);
+            } else {
+                shell.openPath(installerPath);
+            }
+        }
+        
+        // 延迟退出，让安装程序有时间启动
+        setTimeout(() => {
+            app.quit();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('启动安装程序失败:', error);
+        event.reply('update-error', `启动安装程序失败: ${error.message}`);
+    }
+});
+
+// 取消下载
+ipcMain.on('cancel-download', () => {
+    if (currentDownload.controller) {
+        currentDownload.controller.abort();
+    }
+    currentDownload.inProgress = false;
+    console.log('下载已取消');
 });
 
 // 照片重命名功能相关的 IPC 通信
