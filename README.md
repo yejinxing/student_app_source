@@ -119,7 +119,7 @@ student_app_source/
 
 ## 📄 许可协议
 
-MIT License - 查看 LICENSE 文件以获取详细信息
+GPL-3.0 License - 查看 LICENSE 文件以获取详细信息
 
 ## 🤝 贡献
 

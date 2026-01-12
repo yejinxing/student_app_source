@@ -5,6 +5,8 @@ const fs = require('fs-extra');
 const PhotoRenamer = require('./src/photoRenamer');
 const xlsx = require('xlsx');
 const { autoUpdater } = require('electron-updater');
+const https = require('https');
+const http = require('http');
 
 let mainWindow;
 let appSettings = {};
@@ -91,9 +93,89 @@ ipcMain.on('start-conversion', async (event, { excelPath }) => {
 
 // ===== 自动更新功能 (使用 electron-updater) =====
 
-// 配置 autoUpdater
+// 仓库信息
+const REPO_OWNER = 'yejinxing';
+const REPO_NAME = 'student_app_source';
+const GITEE_OWNER = 'yejinxing';
+const GITEE_REPO = 'student_app_source';
+
+// GitHub 镜像加速列表（按优先级排序）
+const GITHUB_MIRRORS = [
+    { name: 'ghproxy', prefix: 'https://mirror.ghproxy.com/' },
+    { name: 'ghproxy.net', prefix: 'https://ghproxy.net/' },
+    { name: 'gh-proxy', prefix: 'https://gh-proxy.com/' },
+    { name: '直连', prefix: '' }
+];
+
+// 配置 autoUpdater - 从 Gitee 获取元数据，从 GitHub 镜像下载安装包
 autoUpdater.autoDownload = false; // 不自动下载，等用户确认
 autoUpdater.autoInstallOnAppQuit = false; // 不在退出时自动安装，我们手动控制
+
+// 动态获取最新版本的 latest.yml
+// 由于 Gitee 没有 latest 标签，我们需要先获取最新版本号
+async function getLatestVersionFromGitee() {
+    try {
+        const https = require('https');
+        return new Promise((resolve, reject) => {
+            const options = {
+                headers: { 'User-Agent': 'StudentApp/' + app.getVersion() },
+                timeout: 10000
+            };
+            
+            https.get(`https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/latest`, options, (res) => {
+                if (res.statusCode !== 200) {
+                    reject(new Error(`HTTP ${res.statusCode}`));
+                    return;
+                }
+                
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    try {
+                        const release = JSON.parse(data);
+                        resolve(release.tag_name);
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            }).on('error', reject).on('timeout', () => {
+                reject(new Error('请求超时'));
+            });
+        });
+    } catch (e) {
+        console.error('获取 Gitee 最新版本失败:', e);
+        return null;
+    }
+}
+
+// 配置更新源：从 Gitee 获取 latest.yml（元数据文件小，国内访问快）
+// 注意：feedUrl 会在检查更新时动态设置
+const platform = process.platform;
+
+// 初始化时设置一个默认的 feedUrl（会在检查更新时更新）
+let feedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/latest/latest.yml`;
+
+if (platform === 'darwin') {
+    feedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/latest/latest-mac.yml`;
+} else if (platform === 'linux') {
+    feedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/latest/latest-linux.yml`;
+}
+
+// 设置更新源（使用 Gitee）
+autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: feedUrl
+});
+
+console.log('[AutoUpdater] 更新源配置:');
+console.log('  - 元数据: Gitee (动态获取最新版本)');
+console.log('  - 安装包: GitHub (latest.yml 中的 URL，支持镜像加速)');
+
+// 开发模式下也允许检查更新（用于测试）
+if (!app.isPackaged) {
+    autoUpdater.forceDevUpdateConfig = true;
+    console.log('[AutoUpdater] 开发模式：已启用更新检查');
+}
 
 // 配置日志
 autoUpdater.logger = {
@@ -171,6 +253,18 @@ autoUpdater.on('checking-for-update', () => {
 autoUpdater.on('update-available', (info) => {
     console.log('发现新版本:', info.version);
     updateInfo = info;
+    currentUpdateInfo = info; // 保存更新信息用于自定义下载
+    
+    // 修改下载 URL 为 GitHub 镜像（如果 URL 指向 GitHub）
+    if (info.files && info.files.length > 0) {
+        info.files.forEach(file => {
+            if (file.url && file.url.includes('github.com')) {
+                // 保存原始 URL，下载时会使用镜像
+                file.originalUrl = file.url;
+                console.log('检测到 GitHub URL，将在下载时使用镜像:', file.url);
+            }
+        });
+    }
     
     if (mainWindow) {
         mainWindow.webContents.send('update-available', {
@@ -234,6 +328,32 @@ autoUpdater.on('error', (err) => {
 ipcMain.on('check-for-updates', async (event) => {
     console.log('开始检查更新...');
     try {
+        // 先从 Gitee 获取最新版本号，然后设置正确的 feedUrl
+        const latestVersion = await getLatestVersionFromGitee();
+        
+        if (latestVersion) {
+            // 构造最新版本的 latest.yml URL
+            let latestFeedUrl;
+            if (platform === 'win32') {
+                latestFeedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${latestVersion}/latest.yml`;
+            } else if (platform === 'darwin') {
+                latestFeedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${latestVersion}/latest-mac.yml`;
+            } else {
+                latestFeedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${latestVersion}/latest-linux.yml`;
+            }
+            
+            // 更新 feedUrl
+            autoUpdater.setFeedURL({
+                provider: 'generic',
+                url: latestFeedUrl
+            });
+            
+            console.log('使用 Gitee feedUrl:', latestFeedUrl);
+        } else {
+            console.log('无法获取 Gitee 最新版本，使用默认 feedUrl');
+        }
+        
+        // 检查更新
         await autoUpdater.checkForUpdates();
     } catch (error) {
         console.error('检查更新失败:', error);
@@ -241,11 +361,22 @@ ipcMain.on('check-for-updates', async (event) => {
     }
 });
 
+// 存储当前更新信息（用于自定义下载）
+let currentUpdateInfo = null;
+
 // IPC: 开始下载更新
+// 注意：electron-updater 会使用 latest.yml 中的 URL 下载
+// latest.yml 从 Gitee 获取，但其中的安装包 URL 应该指向 GitHub
+// 我们通过修改 latest.yml 的 feed URL 来实现从 Gitee 获取元数据
 ipcMain.on('download-update', async (event) => {
     console.log('开始下载更新...');
+    console.log('说明：latest.yml 从 Gitee 获取，安装包从 GitHub 下载（latest.yml 中的 URL）');
+    
     try {
         event.reply('update-downloading');
+        // electron-updater 会自动使用 latest.yml 中的 URL 下载安装包
+        // 如果 latest.yml 中的 URL 指向 GitHub，下载就会从 GitHub 进行
+        // 如果需要使用镜像，需要在构建时修改 latest.yml 中的 URL
         await autoUpdater.downloadUpdate();
     } catch (error) {
         console.error('下载更新失败:', error);

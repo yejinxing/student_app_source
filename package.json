@@ -103,7 +103,7 @@
     "photo-renamer"
   ],
   "author": "yejinxing <yejinxing1728@qq.com>",
-  "license": "MIT",
+  "license": "GPL-3.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/yejinxing/student_app_source.git"
