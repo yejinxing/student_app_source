@@ -342,6 +342,19 @@
             border: 1px solid #fecaca;
         }
         
+        /* 可点击的文件链接 */
+        .file-link {
+            color: #2563eb;
+            text-decoration: underline;
+            cursor: pointer;
+            word-break: break-all;
+        }
+        
+        .file-link:hover {
+            color: #1d4ed8;
+            text-decoration: underline;
+        }
+        
         /* 文件路径显示 */
         #file-path {
             margin: 16px 0;
@@ -2481,7 +2494,7 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
+        const { ipcRenderer, shell } = require('electron');
         let selectedPath = '';
 
         // 侧边栏切换
@@ -2549,7 +2562,7 @@
         ipcRenderer.on('conversion-success', (event, outputPath) => {
             const status = document.getElementById('status');
             status.className = 'status success';
-            status.innerText = `转换成功！文件已保存至: ${outputPath}`;
+            status.innerHTML = `转换成功！文件已保存至: <a href="#" class="file-link" onclick="shell.openPath('${outputPath.replace(/\\/g, '\\\\')}'); return false;">${outputPath}</a>`;
             document.getElementById('convert-btn').disabled = false;
             document.getElementById('convert-btn').innerText = '开始转换';
         });

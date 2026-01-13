@@ -1,4 +1,4 @@
-const { convertExcelToWord } = require('./converter');
+const { convertExcelToWord } = require('../src/converter');
 const path = require('path');
 
 async function test() {

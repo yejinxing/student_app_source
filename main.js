@@ -53,12 +53,36 @@ function createWindow() {
     });
 
     mainWindow.loadFile('index.html');
+    
+    // 窗口加载完成后，也尝试清理（作为备用清理机制）
+    mainWindow.webContents.once('did-finish-load', () => {
+        console.log('窗口加载完成，执行备用清理...');
+        setTimeout(async () => {
+            await cleanupUpdateCache();
+        }, 2000);
+    });
 }
 
-app.whenReady().then(() => {
-    // 应用启动时清理更新缓存
-    cleanupUpdateCache();
+app.whenReady().then(async () => {
+    // 应用启动时延迟清理更新缓存
+    // 延迟执行，确保安装程序完全退出后再清理（避免文件被占用）
+    console.log('应用启动，准备清理更新缓存...');
+    
+    // 立即创建窗口（不阻塞）
     createWindow();
+    
+    // 延迟 3 秒后执行清理（给安装程序时间完全退出）
+    setTimeout(async () => {
+        console.log('延迟清理：等待安装程序退出后开始清理...');
+        await cleanupUpdateCache();
+    }, 3000);
+    
+    // 也在窗口创建后立即尝试清理（作为快速清理）
+    // 如果文件没有被占用，可以立即清理
+    setTimeout(async () => {
+        console.log('快速清理：尝试立即清理（如果文件未被占用）...');
+        await cleanupUpdateCache();
+    }, 500);
 });
 
 ipcMain.on('select-file', async (event) => {
@@ -111,25 +135,7 @@ const GITHUB_MIRRORS = [
 autoUpdater.autoDownload = false; // 不自动下载，等用户确认
 autoUpdater.autoInstallOnAppQuit = false; // 不在退出时自动安装，我们手动控制
 
-// 设置安装包下载目录为项目目录的 resources 文件夹
-// 开发模式：项目根目录/resources
-// 打包模式：应用安装目录/resources
-const downloadDir = app.isPackaged 
-    ? path.join(path.dirname(app.getPath('exe')), 'resources')
-    : path.join(__dirname, 'resources');
-
-// 确保下载目录存在
-try {
-    if (!fs.existsSync(downloadDir)) {
-        fs.mkdirSync(downloadDir, { recursive: true });
-        console.log('[AutoUpdater] 已创建下载目录:', downloadDir);
-    }
-    // 设置 electron-updater 的缓存目录
-    autoUpdater.cacheDir = downloadDir;
-    console.log('[AutoUpdater] 安装包下载目录:', downloadDir);
-} catch (e) {
-    console.warn('[AutoUpdater] 设置下载目录失败:', e.message);
-}
+// 注意：cacheDir 已在 setFeedURL 之前设置
 
 // 通用的 HTTP GET 请求函数，支持重定向
 function httpGet(url, options = {}, maxRedirects = 5) {
@@ -224,7 +230,66 @@ const platform = process.platform;
 // 现在所有平台都使用统一的 latest.yml（包含所有平台的文件信息）
 let feedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/latest/latest.yml`;
 
+// 获取应用安装目录的函数
+function getAppInstallDir() {
+    if (!app.isPackaged) {
+        // 开发模式：使用项目根目录
+        return __dirname;
+    }
+    
+    // 打包模式：获取应用安装目录
+    const exePath = app.getPath('exe');
+    const exeDir = path.dirname(exePath);
+    
+    // 打印调试信息
+    console.log('[Debug] 可执行文件路径:', exePath);
+    console.log('[Debug] 可执行文件目录:', exeDir);
+    
+    // 对于 Windows，如果 exe 在 resources 目录下（如 resources/app.asar），需要向上两级
+    // 对于普通安装，exe 就在安装目录下
+    if (exeDir.includes('resources')) {
+        // 如果 exe 在 resources 目录下，向上两级到安装目录
+        const installDir = path.dirname(path.dirname(exeDir));
+        console.log('[Debug] 检测到 resources 目录，应用安装目录:', installDir);
+        return installDir;
+    } else {
+        // exe 直接在安装目录下
+        console.log('[Debug] exe 在安装目录下，应用安装目录:', exeDir);
+        return exeDir;
+    }
+}
+
+// 获取下载目录的函数
+function getDownloadDir() {
+    if (!app.isPackaged) {
+        // 开发模式：使用项目根目录/resources
+        return path.join(__dirname, 'resources');
+    }
+    
+    // 打包模式：使用应用安装目录/resources
+    const installDir = getAppInstallDir();
+    const downloadDir = path.join(installDir, 'resources');
+    console.log('[Debug] 下载目录:', downloadDir);
+    return downloadDir;
+}
+
 // 设置更新源（使用 Gitee）
+// 同时设置 cacheDir，确保下载到指定目录
+const initialDownloadDir = getDownloadDir();
+try {
+    if (!fs.existsSync(initialDownloadDir)) {
+        fs.mkdirSync(initialDownloadDir, { recursive: true });
+        console.log('[AutoUpdater] 已创建下载目录:', initialDownloadDir);
+    }
+    // 设置 cacheDir（必须在 setFeedURL 之前设置）
+    autoUpdater.cacheDir = initialDownloadDir;
+    // 同时设置环境变量（某些版本的 electron-updater 可能使用环境变量）
+    process.env.UPDATER_CACHE_DIR = initialDownloadDir;
+    console.log('[AutoUpdater] 已设置 cacheDir:', initialDownloadDir);
+} catch (e) {
+    console.warn('[AutoUpdater] 设置 cacheDir 失败:', e.message);
+}
+
 autoUpdater.setFeedURL({
     provider: 'generic',
     url: feedUrl
@@ -292,49 +357,302 @@ function getPlatformName() {
     }
 }
 
-// 清理更新缓存目录
-function cleanupUpdateCache() {
+// 强制删除目录的辅助函数（带重试机制）
+async function forceRemoveDir(dirPath, maxRetries = 5) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            if (!fs.existsSync(dirPath)) {
+                return true; // 目录已不存在
+            }
+            
+            // 尝试删除
+            fs.removeSync(dirPath);
+            return true; // 删除成功
+        } catch (e) {
+            if (i < maxRetries - 1) {
+                // 等待一段时间后重试（文件可能被占用）
+                // 逐渐增加等待时间：500ms, 1000ms, 2000ms, 3000ms, 5000ms
+                const waitTime = Math.min(500 * Math.pow(2, i), 5000);
+                console.log(`删除失败 (${e.message})，等待 ${waitTime}ms 后重试 (${i + 1}/${maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            } else {
+                // 最后一次尝试失败，抛出错误
+                throw e;
+            }
+        }
+    }
+    return false;
+}
+
+// 递归清理目录的辅助函数（逐个删除文件和子目录）
+async function cleanupDirRecursively(dirPath, cleanedCountRef) {
     try {
-        // 清理 electron-updater 的默认缓存目录（userData/pending）
-        const updateCacheDir = path.join(app.getPath('userData'), 'pending');
-        if (fs.existsSync(updateCacheDir)) {
-            fs.removeSync(updateCacheDir);
-            console.log('已清理默认更新缓存目录:', updateCacheDir);
+        console.log('尝试逐个删除文件和子目录...');
+        const files = fs.readdirSync(dirPath);
+        
+        for (const file of files) {
+            const filePath = path.join(dirPath, file);
+            try {
+                const stat = fs.statSync(filePath);
+                if (stat.isDirectory()) {
+                    console.log('  删除子目录:', filePath);
+                    await forceRemoveDir(filePath, 3);
+                    cleanedCountRef.count++;
+                } else {
+                    console.log('  删除文件:', filePath);
+                    // 文件删除也带重试
+                    for (let i = 0; i < 3; i++) {
+                        try {
+                            fs.unlinkSync(filePath);
+                            cleanedCountRef.count++;
+                            break;
+                        } catch (fileError) {
+                            if (i < 2) {
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                            } else {
+                                throw fileError;
+                            }
+                        }
+                    }
+                }
+            } catch (fileError) {
+                console.warn(`  删除失败 ${filePath}:`, fileError.message);
+            }
         }
         
-        // 清理项目 resources 目录中的旧安装包
-        const resourcesDir = app.isPackaged 
-            ? path.join(path.dirname(app.getPath('exe')), 'resources')
-            : path.join(__dirname, 'resources');
+        // 再次尝试删除空目录
+        try {
+            await forceRemoveDir(dirPath, 3);
+            console.log('✓ 已删除空的目录');
+            cleanedCountRef.count++;
+        } catch (e2) {
+            console.warn('删除空目录失败:', e2.message);
+        }
+    } catch (e2) {
+        console.error('逐个删除也失败:', e2.message);
+    }
+}
+
+// 清理更新缓存目录（确保安装后删除安装包，避免占用磁盘空间）
+async function cleanupUpdateCache() {
+    const timestamp = new Date().toISOString();
+    console.log(`=== [${timestamp}] 开始清理更新缓存 ===`);
+    let cleanedCount = 0;
+    // 使用对象引用，以便在辅助函数中修改
+    const cleanedCountRef = { count: 0 };
+    
+    // 检查是否有清理标记，如果有，说明这是安装后的首次启动
+    const cleanupMarkerPath = path.join(app.getPath('userData'), 'cleanup-marker.json');
+    const hasCleanupMarker = fs.existsSync(cleanupMarkerPath);
+    if (hasCleanupMarker) {
+        console.log('检测到清理标记，这是安装后的首次启动，将执行完整清理');
+    } else {
+        console.log('未检测到清理标记，执行常规清理检查');
+    }
+    
+    try {
+        // 1. 检查是否有清理标记（上次安装后需要清理的目录）
+        const cleanupMarkerPath = path.join(app.getPath('userData'), 'cleanup-marker.json');
+        if (fs.existsSync(cleanupMarkerPath)) {
+            try {
+                const marker = JSON.parse(fs.readFileSync(cleanupMarkerPath, 'utf8'));
+                console.log('发现清理标记（版本:', marker.version || '未知', '），开始清理安装包...');
+                
+                // 清理实际下载位置
+                if (marker.actualPendingDir && fs.existsSync(marker.actualPendingDir)) {
+                    try {
+                        await forceRemoveDir(marker.actualPendingDir);
+                        console.log('✓ 已清理安装包目录:', marker.actualPendingDir);
+                        cleanedCount++;
+                    } catch (e) {
+                        console.warn('清理安装包目录失败:', marker.actualPendingDir, e.message);
+                    }
+                }
+                
+                // 清理所有可能的位置（确保清理完整）
+                // 特别注意：updaterCacheDir 必须最后清理，因为它包含其他目录
+                const dirsToClean = [
+                    marker.defaultPendingDir,
+                    marker.updaterPendingDir,
+                    // updaterCacheDir 放在最后，因为它包含 pending 目录
+                ];
+                
+                for (const dir of dirsToClean) {
+                    if (dir && fs.existsSync(dir)) {
+                        try {
+                            await forceRemoveDir(dir);
+                            console.log('✓ 已清理:', dir);
+                            cleanedCount++;
+                        } catch (e) {
+                            console.warn('清理失败:', dir, e.message);
+                        }
+                    }
+                }
+                
+                // 最后清理 updaterCacheDir（包含所有子目录）
+                if (marker.updaterCacheDir && fs.existsSync(marker.updaterCacheDir)) {
+                    try {
+                        await forceRemoveDir(marker.updaterCacheDir);
+                        console.log('✓ 已清理 updater 缓存目录:', marker.updaterCacheDir);
+                        cleanedCount++;
+                    } catch (e) {
+                        console.warn('清理 updater 缓存目录失败:', marker.updaterCacheDir, e.message);
+                    }
+                }
+                
+                // 删除清理标记
+                fs.unlinkSync(cleanupMarkerPath);
+                console.log('已删除清理标记');
+            } catch (e) {
+                console.warn('处理清理标记失败:', e.message);
+            }
+        }
+        
+        // 2. 清理 electron-updater 的默认缓存目录（即使没有清理标记也清理）
+        // 注意：electron-updater 可能使用 userData (Roaming) 或 Local 目录
+        const userDataPendingDir = path.join(app.getPath('userData'), 'pending');
+        if (fs.existsSync(userDataPendingDir)) {
+            try {
+                await forceRemoveDir(userDataPendingDir);
+                console.log('✓ 已清理 userData pending 目录:', userDataPendingDir);
+                cleanedCount++;
+            } catch (e) {
+                console.warn('清理 userData pending 目录失败:', e.message);
+            }
+        }
+        
+        // 2.5. 清理 Local 目录下的 pending（electron-updater 实际使用的目录）
+        // Windows 上，electron-updater 可能使用 AppData\Local 而不是 Roaming
+        let localPendingDir = null;
+        if (process.platform === 'win32') {
+            // Windows: AppData\Local\<appName>\pending
+            const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE, 'AppData', 'Local');
+            localPendingDir = path.join(localAppData, app.getName(), 'pending');
+            if (fs.existsSync(localPendingDir)) {
+                console.log('发现 Local 目录下的 pending:', localPendingDir);
+                try {
+                    await forceRemoveDir(localPendingDir);
+                    console.log('✓ 已清理 Local pending 目录:', localPendingDir);
+                    cleanedCount++;
+                } catch (e) {
+                    console.warn('清理 Local pending 目录失败:', e.message);
+                }
+            }
+        }
+        
+        // 3. 清理 electron-updater 可能使用的另一个默认位置（userData/app-updater）
+        const updaterCacheDir = path.join(app.getPath('userData'), app.getName() + '-updater');
+        if (fs.existsSync(updaterCacheDir)) {
+            console.log('发现 updater 缓存目录（Roaming），准备清理:', updaterCacheDir);
+            try {
+                const files = fs.readdirSync(updaterCacheDir);
+                console.log('  updater 目录包含:', files);
+                const success = await forceRemoveDir(updaterCacheDir, 5);
+                if (success) {
+                    console.log('✓ 已清理 electron-updater 缓存目录（Roaming）:', updaterCacheDir);
+                    cleanedCount++;
+                } else {
+                    throw new Error('强制删除失败');
+                }
+                } catch (e) {
+                    console.warn('清理 updater 缓存目录（Roaming）失败:', e.message);
+                    // 尝试逐个删除
+                    await cleanupDirRecursively(updaterCacheDir, cleanedCountRef);
+                }
+        }
+        
+        // 3.5. 清理 Local 目录下的 updater 目录（这是实际使用的目录！）
+        let localUpdaterCacheDir = null;
+        if (process.platform === 'win32') {
+            const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE, 'AppData', 'Local');
+            localUpdaterCacheDir = path.join(localAppData, app.getName() + '-updater');
+            if (fs.existsSync(localUpdaterCacheDir)) {
+                console.log('发现 updater 缓存目录（Local），准备清理:', localUpdaterCacheDir);
+                try {
+                    const files = fs.readdirSync(localUpdaterCacheDir);
+                    console.log('  updater 目录包含:', files);
+                    const success = await forceRemoveDir(localUpdaterCacheDir, 5);
+                    if (success) {
+                        console.log('✓ 已清理 electron-updater 缓存目录（Local）:', localUpdaterCacheDir);
+                        cleanedCount++;
+                    } else {
+                        throw new Error('强制删除失败');
+                    }
+                } catch (e) {
+                    console.warn('清理 updater 缓存目录（Local）失败:', e.message);
+                    console.warn('错误详情:', e);
+                    // 尝试逐个删除
+                    await cleanupDirRecursively(localUpdaterCacheDir, cleanedCountRef);
+                }
+            }
             
+            // 3.6. 也清理 Local 目录下直接以 app 名称命名的目录
+            const localAppDir = path.join(localAppData, app.getName());
+            if (fs.existsSync(localAppDir)) {
+                const files = fs.readdirSync(localAppDir);
+                // 只清理 pending 目录，不删除整个 app 目录（可能包含其他数据）
+                const localAppPendingDir = path.join(localAppDir, 'pending');
+                if (fs.existsSync(localAppPendingDir)) {
+                    console.log('发现 Local app 目录下的 pending，准备清理:', localAppPendingDir);
+                    try {
+                        await forceRemoveDir(localAppPendingDir, 5);
+                        console.log('✓ 已清理 Local app pending 目录:', localAppPendingDir);
+                        cleanedCount++;
+                    } catch (e) {
+                        console.warn('清理 Local app pending 目录失败:', e.message);
+                    }
+                }
+            }
+        }
+        
+        // 4. 清理项目 resources 目录中的旧安装包（如果存在）
+        const resourcesDir = getDownloadDir();
         if (fs.existsSync(resourcesDir)) {
-            const files = fs.readdirSync(resourcesDir);
-            files.forEach(file => {
-                // 清理安装包文件（.exe, .dmg, .AppImage, .deb, .rpm 等）
-                if (file.match(/\.(exe|dmg|AppImage|deb|rpm)$/i) && file.includes('StudentInfoTool')) {
+            try {
+                const files = fs.readdirSync(resourcesDir);
+                files.forEach(file => {
+                    // 清理安装包文件（.exe, .dmg, .AppImage, .deb, .rpm 等）
+                    if (file.match(/\.(exe|dmg|AppImage|deb|rpm)$/i) && file.includes('StudentInfoTool')) {
+                        const filePath = path.join(resourcesDir, file);
+                        try {
+                            fs.unlinkSync(filePath);
+                            console.log('✓ 已清理旧安装包:', filePath);
+                            cleanedCount++;
+                        } catch (e) {
+                            console.warn('清理文件失败:', filePath, e.message);
+                        }
+                    }
+                    // 清理 electron-updater 创建的临时目录（pending 目录）
                     const filePath = path.join(resourcesDir, file);
                     try {
-                        fs.unlinkSync(filePath);
-                        console.log('已清理旧安装包:', filePath);
+                        const stat = fs.statSync(filePath);
+                        if (stat.isDirectory() && file === 'pending') {
+                            fs.removeSync(filePath);
+                            console.log('✓ 已清理 pending 目录:', filePath);
+                            cleanedCount++;
+                        }
                     } catch (e) {
-                        console.log('清理文件失败:', filePath, e.message);
+                        // 忽略文件不存在等错误
                     }
-                }
-                // 清理 electron-updater 创建的临时目录（pending 目录）
-                const filePath = path.join(resourcesDir, file);
-                const stat = fs.statSync(filePath);
-                if (stat.isDirectory() && file === 'pending') {
-                    try {
-                        fs.removeSync(filePath);
-                        console.log('已清理 pending 目录:', filePath);
-                    } catch (e) {
-                        console.log('清理目录失败:', filePath, e.message);
-                    }
-                }
-            });
+                });
+            } catch (e) {
+                console.warn('清理 resources 目录失败:', e.message);
+            }
+        }
+        
+        // 合并清理计数
+        cleanedCount = cleanedCount + cleanedCountRef.count;
+        
+        const endTimestamp = new Date().toISOString();
+        if (cleanedCount > 0) {
+            console.log(`=== [${endTimestamp}] 清理完成，共清理 ${cleanedCount} 个文件/目录 ===`);
+        } else {
+            console.log(`=== [${endTimestamp}] 无需清理，没有残留的安装包 ===`);
         }
     } catch (e) {
-        console.log('清理更新缓存时出错:', e.message);
+        const errorTimestamp = new Date().toISOString();
+        console.error(`=== [${errorTimestamp}] 清理更新缓存时出错:`, e.message);
+        console.error('错误堆栈:', e.stack);
     }
 }
 
@@ -413,11 +731,46 @@ autoUpdater.on('download-progress', (progressObj) => {
 
 autoUpdater.on('update-downloaded', (info) => {
     console.log('更新下载完成:', info.version);
-    const downloadDir = app.isPackaged 
-        ? path.join(path.dirname(app.getPath('exe')), 'resources')
-        : path.join(__dirname, 'resources');
-    console.log('安装包位置:', downloadDir);
-    console.log('注意: 安装完成后，electron-updater 会自动清理安装包文件');
+    
+    // 记录所有可能的安装包位置（用于安装后清理）
+    const defaultPendingDir = path.join(app.getPath('userData'), 'pending');
+    const updaterCacheDir = path.join(app.getPath('userData'), app.getName() + '-updater');
+    const updaterPendingDir = path.join(updaterCacheDir, 'pending');
+    
+    // 检查实际下载位置
+    let actualPendingDir = null;
+    if (fs.existsSync(updaterPendingDir)) {
+        actualPendingDir = updaterPendingDir;
+        console.log('安装包位置:', updaterPendingDir);
+    } else if (fs.existsSync(defaultPendingDir)) {
+        actualPendingDir = defaultPendingDir;
+        console.log('安装包位置:', defaultPendingDir);
+    } else {
+        console.warn('警告: 未找到安装包文件');
+    }
+    
+    // 记录需要清理的目录（用于安装后清理）
+    // 将清理标记保存到设置文件中，确保安装后能够清理所有可能的安装包位置
+    try {
+        const cleanupMarker = {
+            // 实际下载位置
+            actualPendingDir: actualPendingDir,
+            // 所有可能的位置（确保清理完整）
+            defaultPendingDir: defaultPendingDir,
+            updaterPendingDir: updaterPendingDir,
+            updaterCacheDir: updaterCacheDir,
+            // Local 目录位置（Windows 上实际使用的）
+            localPendingDir: localPendingDir,
+            localUpdaterCacheDir: localUpdaterCacheDir,
+            version: info.version,
+            timestamp: Date.now()
+        };
+        const cleanupMarkerPath = path.join(app.getPath('userData'), 'cleanup-marker.json');
+        fs.writeFileSync(cleanupMarkerPath, JSON.stringify(cleanupMarker, null, 2), 'utf8');
+        console.log('已记录清理标记（安装后会自动清理安装包）:', cleanupMarkerPath);
+    } catch (e) {
+        console.warn('记录清理标记失败:', e.message);
+    }
     
     if (mainWindow) {
         mainWindow.webContents.send('update-downloaded', {
@@ -541,6 +894,27 @@ ipcMain.on('check-for-updates', async (event) => {
         // electron-updater 会根据当前运行平台自动选择对应的文件
         const giteeDirUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${apiVersion}/`;
         
+        // 在设置 feedURL 之前，确保 cacheDir 设置正确
+        console.log('=== 检查更新时重新设置下载目录 ===');
+        const currentDownloadDir = getDownloadDir();
+        console.log('[AutoUpdater] 当前下载目录:', currentDownloadDir);
+        
+        try {
+            if (!fs.existsSync(currentDownloadDir)) {
+                fs.mkdirSync(currentDownloadDir, { recursive: true });
+                console.log('[AutoUpdater] 已创建下载目录:', currentDownloadDir);
+            }
+            // 重新设置 cacheDir（确保每次检查更新时都使用正确的目录）
+            autoUpdater.cacheDir = currentDownloadDir;
+            process.env.UPDATER_CACHE_DIR = currentDownloadDir;
+            console.log('[AutoUpdater] 已设置 cacheDir:', currentDownloadDir);
+            console.log('[AutoUpdater] 已设置环境变量 UPDATER_CACHE_DIR:', currentDownloadDir);
+            console.log('[AutoUpdater] 当前 cacheDir 值:', autoUpdater.cacheDir);
+        } catch (e) {
+            console.error('[AutoUpdater] 设置 cacheDir 失败:', e.message);
+            console.error('[AutoUpdater] 错误堆栈:', e.stack);
+        }
+        
         // 设置更新源为 Gitee 目录 URL（electron-updater 会自动追加 latest.yml）
         autoUpdater.setFeedURL({
             provider: 'generic',
@@ -629,11 +1003,37 @@ ipcMain.on('download-update', async (event) => {
     console.log('  - 安装包文件（.exe/.dmg/.AppImage 等）：从 GitHub 下载（latest.yml 中的 URL）');
     console.log('  - blockmap 文件：从 Gitee 下载（用于增量更新验证，文件小，国内访问快）');
     
-    // 显示下载目录
-    const downloadDir = app.isPackaged 
-        ? path.join(path.dirname(app.getPath('exe')), 'resources')
-        : path.join(__dirname, 'resources');
-    console.log('  - 安装包保存位置:', downloadDir);
+    // 在下载前检测当前应用位置并设置下载目录
+    console.log('=== 检测应用安装位置 ===');
+    const exePath = app.getPath('exe');
+    const installDir = getAppInstallDir();
+    const downloadDir = getDownloadDir();
+    
+    console.log('当前应用位置:');
+    console.log('  - 可执行文件:', exePath);
+    console.log('  - 应用安装目录:', installDir);
+    console.log('  - 下载目录:', downloadDir);
+    console.log('  - 安装包保存位置:', path.join(downloadDir, 'pending'));
+    
+    try {
+        if (!fs.existsSync(downloadDir)) {
+            fs.mkdirSync(downloadDir, { recursive: true });
+            console.log('[AutoUpdater] 已创建下载目录:', downloadDir);
+        }
+        
+        // 重新设置 cacheDir（确保下载时使用正确的目录）
+        autoUpdater.cacheDir = downloadDir;
+        // 同时设置环境变量
+        process.env.UPDATER_CACHE_DIR = downloadDir;
+        console.log('[AutoUpdater] 已设置 cacheDir:', downloadDir);
+        console.log('[AutoUpdater] 已设置环境变量 UPDATER_CACHE_DIR:', downloadDir);
+        
+        // 验证 cacheDir 是否设置成功
+        console.log('[AutoUpdater] 当前 cacheDir 值:', autoUpdater.cacheDir);
+    } catch (e) {
+        console.error('[AutoUpdater] 设置 cacheDir 失败:', e.message);
+        console.error('[AutoUpdater] 错误堆栈:', e.stack);
+    }
     
     try {
         // 检查是否有更新信息
@@ -648,7 +1048,21 @@ ipcMain.on('download-update', async (event) => {
         // 格式：https://github.com/yejinxing/student_app_source/releases/download/v1.0.2/StudentInfoTool-Setup-1.0.2.exe
         await autoUpdater.downloadUpdate();
         console.log('下载更新成功');
-        console.log('安装包已保存到:', downloadDir);
+        
+        // 检查安装包下载位置（用于记录，安装后清理）
+        const defaultPendingDir = path.join(app.getPath('userData'), 'pending');
+        const updaterCacheDir = path.join(app.getPath('userData'), app.getName() + '-updater');
+        const updaterPendingDir = path.join(updaterCacheDir, 'pending');
+        
+        console.log('=== 安装包下载位置 ===');
+        if (fs.existsSync(updaterPendingDir)) {
+            console.log('安装包位置:', updaterPendingDir);
+        } else if (fs.existsSync(defaultPendingDir)) {
+            console.log('安装包位置:', defaultPendingDir);
+        } else {
+            console.warn('警告: 未找到下载的安装包文件');
+        }
+        console.log('注意: 安装完成后，应用会自动清理安装包，避免占用磁盘空间');
     } catch (error) {
         console.error('下载更新失败:', error);
         const errorMessage = error.message || '未知错误';
@@ -665,9 +1079,10 @@ ipcMain.on('download-update', async (event) => {
 // IPC: 安装更新（退出并安装）
 ipcMain.on('install-update', (event) => {
     console.log('准备安装更新...');
+    console.log('注意: 安装完成后，应用启动时会自动清理安装包，避免占用磁盘空间');
     
     // 注意：不要在这里清理缓存，因为 electron-updater 需要 pending 目录中的文件来安装
-    // electron-updater 安装完成后会自动清理
+    // 清理标记已经记录在 cleanup-marker.json 中，应用启动时会自动清理
     
     // 退出并安装
     // setImmediate 确保在下一个事件循环中执行，让前端有时间响应
@@ -804,26 +1219,82 @@ ipcMain.on('select-default-output-dir', async (event) => {
 
 // 清理缓存
 ipcMain.on('clear-cache', async (event) => {
+    console.log('开始清理缓存...');
+    let success = true;
+    let errorMessages = [];
+    
     try {
         const cachePath = app.getPath('userData');
         const cacheDir = path.join(cachePath, 'Cache');
         const gpuCacheDir = path.join(cachePath, 'GPUCache');
         
+        // 1. 清理浏览器缓存目录
         if (fs.existsSync(cacheDir)) {
-            await fs.remove(cacheDir);
-        }
-        if (fs.existsSync(gpuCacheDir)) {
-            await fs.remove(gpuCacheDir);
+            try {
+                console.log('清理 Cache 目录:', cacheDir);
+                // 使用强制删除函数（带重试机制）
+                const removed = await forceRemoveDir(cacheDir, 3);
+                if (removed) {
+                    console.log('✓ Cache 目录已清理');
+                } else {
+                    throw new Error('强制删除失败');
+                }
+            } catch (e) {
+                console.warn('清理 Cache 目录失败:', e.message);
+                errorMessages.push(`Cache 目录: ${e.message}`);
+                success = false;
+            }
         }
         
-        event.reply('cache-cleared', true);
+        // 2. 清理 GPU 缓存目录
+        if (fs.existsSync(gpuCacheDir)) {
+            try {
+                console.log('清理 GPUCache 目录:', gpuCacheDir);
+                // 使用强制删除函数（带重试机制）
+                const removed = await forceRemoveDir(gpuCacheDir, 3);
+                if (removed) {
+                    console.log('✓ GPUCache 目录已清理');
+                } else {
+                    throw new Error('强制删除失败');
+                }
+            } catch (e) {
+                console.warn('清理 GPUCache 目录失败:', e.message);
+                errorMessages.push(`GPUCache 目录: ${e.message}`);
+                success = false;
+            }
+        }
+        
+        // 3. 清理安装包（重要：避免占用磁盘空间）
+        console.log('开始清理安装包...');
+        try {
+            await cleanupUpdateCache();
+            console.log('✓ 安装包清理完成');
+        } catch (e) {
+            console.warn('清理安装包失败:', e.message);
+            errorMessages.push(`安装包: ${e.message}`);
+            // 安装包清理失败不影响整体结果，但记录错误
+        }
+        
+        // 如果所有清理都成功，返回成功
+        if (success && errorMessages.length === 0) {
+            console.log('✓ 所有缓存清理完成');
+            event.reply('cache-cleared', true);
+        } else {
+            // 部分成功，返回成功但记录警告
+            if (errorMessages.length > 0) {
+                console.warn('部分清理失败:', errorMessages.join('; '));
+            }
+            // 即使有部分失败，也返回成功（因为主要清理已完成）
+            event.reply('cache-cleared', true);
+        }
     } catch (e) {
-        console.error('清理缓存失败:', e);
+        console.error('清理缓存时发生严重错误:', e);
+        console.error('错误堆栈:', e.stack);
         event.reply('cache-cleared', false);
     }
 });
 
-// 获取缓存大小
+// 获取缓存大小（包括安装包）
 ipcMain.on('get-cache-size', async (event) => {
     try {
         const cachePath = app.getPath('userData');
@@ -832,24 +1303,56 @@ ipcMain.on('get-cache-size', async (event) => {
         const getDirSize = async (dirPath) => {
             if (!fs.existsSync(dirPath)) return 0;
             let size = 0;
-            const files = await fs.readdir(dirPath);
-            for (const file of files) {
-                const filePath = path.join(dirPath, file);
-                const stat = await fs.stat(filePath);
-                if (stat.isDirectory()) {
-                    size += await getDirSize(filePath);
-                } else {
-                    size += stat.size;
+            try {
+                const files = await fs.readdir(dirPath);
+                for (const file of files) {
+                    const filePath = path.join(dirPath, file);
+                    try {
+                        const stat = await fs.stat(filePath);
+                        if (stat.isDirectory()) {
+                            size += await getDirSize(filePath);
+                        } else {
+                            size += stat.size;
+                        }
+                    } catch (e) {
+                        // 忽略无法访问的文件（可能被占用）
+                        console.warn(`无法获取文件大小: ${filePath}`, e.message);
+                    }
                 }
+            } catch (e) {
+                // 忽略无法读取的目录
+                console.warn(`无法读取目录: ${dirPath}`, e.message);
             }
             return size;
         };
         
+        // 1. 浏览器缓存
         const cacheDir = path.join(cachePath, 'Cache');
         const gpuCacheDir = path.join(cachePath, 'GPUCache');
         
         totalSize += await getDirSize(cacheDir);
         totalSize += await getDirSize(gpuCacheDir);
+        
+        // 2. 安装包缓存（Local 目录 - Windows 上实际使用的）
+        if (process.platform === 'win32') {
+            try {
+                const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE, 'AppData', 'Local');
+                const localPendingDir = path.join(localAppData, app.getName(), 'pending');
+                const localUpdaterCacheDir = path.join(localAppData, app.getName() + '-updater');
+                
+                totalSize += await getDirSize(localPendingDir);
+                totalSize += await getDirSize(localUpdaterCacheDir);
+            } catch (e) {
+                console.warn('获取 Local 目录安装包大小失败:', e.message);
+            }
+        }
+        
+        // 3. 安装包缓存（Roaming 目录）
+        const defaultPendingDir = path.join(cachePath, 'pending');
+        const updaterCacheDir = path.join(cachePath, app.getName() + '-updater');
+        
+        totalSize += await getDirSize(defaultPendingDir);
+        totalSize += await getDirSize(updaterCacheDir);
         
         // 格式化大小
         let sizeStr;
