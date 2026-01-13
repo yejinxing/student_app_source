@@ -111,37 +111,80 @@ const GITHUB_MIRRORS = [
 autoUpdater.autoDownload = false; // 不自动下载，等用户确认
 autoUpdater.autoInstallOnAppQuit = false; // 不在退出时自动安装，我们手动控制
 
+// 通用的 HTTP GET 请求函数，支持重定向
+function httpGet(url, options = {}, maxRedirects = 5) {
+    return new Promise((resolve, reject) => {
+        if (maxRedirects <= 0) {
+            reject(new Error('重定向次数过多'));
+            return;
+        }
+        
+        const urlObj = new URL(url);
+        const client = urlObj.protocol === 'https:' ? require('https') : require('http');
+        
+        const requestOptions = {
+            hostname: urlObj.hostname,
+            port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+            path: urlObj.pathname + urlObj.search,
+            method: 'GET',
+            headers: {
+                'User-Agent': 'StudentApp/' + app.getVersion(),
+                ...options.headers
+            },
+            timeout: options.timeout || 10000
+        };
+        
+        const req = client.request(requestOptions, (res) => {
+            // 处理重定向 (301, 302, 303, 307, 308)
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                const redirectUrl = res.headers.location;
+                const absoluteUrl = redirectUrl.startsWith('http') 
+                    ? redirectUrl 
+                    : `${urlObj.protocol}//${urlObj.hostname}${redirectUrl}`;
+                
+                console.log(`跟随重定向: ${url} -> ${absoluteUrl}`);
+                // 递归调用，减少重定向次数
+                httpGet(absoluteUrl, options, maxRedirects - 1)
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+            
+            if (res.statusCode !== 200) {
+                reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+                return;
+            }
+            
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                resolve(data);
+            });
+        });
+        
+        req.on('error', reject);
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('请求超时'));
+        });
+        
+        req.end();
+    });
+}
+
 // 动态获取最新版本的 latest.yml
 // 由于 Gitee 没有 latest 标签，我们需要先获取最新版本号
 async function getLatestVersionFromGitee() {
     try {
-        const https = require('https');
-        return new Promise((resolve, reject) => {
-            const options = {
-                headers: { 'User-Agent': 'StudentApp/' + app.getVersion() },
-                timeout: 10000
-            };
-            
-            https.get(`https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/latest`, options, (res) => {
-                if (res.statusCode !== 200) {
-                    reject(new Error(`HTTP ${res.statusCode}`));
-                    return;
-                }
-                
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                    try {
-                        const release = JSON.parse(data);
-                        resolve(release.tag_name);
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            }).on('error', reject).on('timeout', () => {
-                reject(new Error('请求超时'));
-            });
-        });
+        const url = `https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/latest`;
+        const data = await httpGet(url);
+        
+        try {
+            const release = JSON.parse(data);
+            return release.tag_name;
+        } catch (e) {
+            throw new Error(`解析 JSON 失败: ${e.message}`);
+        }
     } catch (e) {
         console.error('获取 Gitee 最新版本失败:', e);
         return null;
@@ -324,59 +367,181 @@ autoUpdater.on('error', (err) => {
     }
 });
 
+// 手动下载并解析 latest.yml
+async function fetchUpdateInfo(version) {
+    try {
+        let ymlFileName;
+        if (platform === 'win32') {
+            ymlFileName = 'latest.yml';
+        } else if (platform === 'darwin') {
+            ymlFileName = 'latest-mac.yml';
+        } else {
+            ymlFileName = 'latest-linux.yml';
+        }
+        
+        const ymlUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${version}/${ymlFileName}`;
+        
+        console.log('从 Gitee 下载 latest.yml:', ymlUrl);
+        
+        const yaml = require('js-yaml');
+        const data = await httpGet(ymlUrl);
+        
+        try {
+            const updateInfo = yaml.load(data);
+            return updateInfo;
+        } catch (e) {
+            throw new Error(`解析 YAML 失败: ${e.message}`);
+        }
+    } catch (e) {
+        throw e;
+    }
+}
+
 // IPC: 检查更新
 ipcMain.on('check-for-updates', async (event) => {
     console.log('开始检查更新...');
     try {
-        // 先从 Gitee 获取最新版本号，然后设置正确的 feedUrl
+        // 先从 Gitee 获取最新版本号
         const latestVersion = await getLatestVersionFromGitee();
         
-        if (latestVersion) {
-            // 构造最新版本的 latest.yml URL
-            let latestFeedUrl;
-            if (platform === 'win32') {
-                latestFeedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${latestVersion}/latest.yml`;
-            } else if (platform === 'darwin') {
-                latestFeedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${latestVersion}/latest-mac.yml`;
-            } else {
-                latestFeedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${latestVersion}/latest-linux.yml`;
-            }
-            
-            // 更新 feedUrl
-            autoUpdater.setFeedURL({
-                provider: 'generic',
-                url: latestFeedUrl
-            });
-            
-            console.log('使用 Gitee feedUrl:', latestFeedUrl);
+        if (!latestVersion) {
+            throw new Error('无法从 Gitee 获取最新版本号');
+        }
+        
+        console.log('Gitee 最新版本:', latestVersion);
+        
+        // 构造完整的 latest.yml URL
+        // electron-updater 的 generic provider 会在 URL 后追加 /latest.yml
+        // 所以我们需要提供目录路径，而不是文件路径
+        let ymlFileName;
+        if (platform === 'win32') {
+            ymlFileName = 'latest.yml';
+        } else if (platform === 'darwin') {
+            ymlFileName = 'latest-mac.yml';
         } else {
-            console.log('无法获取 Gitee 最新版本，使用默认 feedUrl');
+            ymlFileName = 'latest-linux.yml';
+        }
+        
+        // 提供目录路径（以 / 结尾），electron-updater 会追加 latest.yml
+        // 但我们需要它追加的是 latest-mac.yml 等，所以需要特殊处理
+        // 实际上，electron-updater 总是追加 latest.yml，所以我们需要手动下载
+        
+        // 方案：手动下载 latest.yml，然后使用临时文件
+        const yaml = require('js-yaml');
+        const updateInfo = await fetchUpdateInfo(latestVersion);
+        
+        console.log('解析的更新信息:', JSON.stringify(updateInfo, null, 2));
+        
+        // 比较版本
+        const currentVersion = app.getVersion();
+        
+        // 优先使用从 Gitee API 获取的版本号（因为 latest.yml 中的 version 可能不准确）
+        // 如果 latest.yml 中有 version 字段，也记录一下用于对比
+        const ymlVersion = updateInfo.version;
+        const apiVersion = latestVersion;
+        
+        // 统一处理版本号格式（移除 v 前缀）
+        const normalizedCurrentVersion = currentVersion.replace(/^v/, '');
+        const normalizedApiVersion = apiVersion.replace(/^v/, '');
+        const normalizedYmlVersion = ymlVersion ? ymlVersion.replace(/^v/, '') : null;
+        
+        console.log('版本比较:');
+        console.log('  - 当前版本:', currentVersion, '(标准化:', normalizedCurrentVersion + ')');
+        console.log('  - Gitee API 版本:', apiVersion, '(标准化:', normalizedApiVersion + ')');
+        if (ymlVersion) {
+            console.log('  - latest.yml 版本:', ymlVersion, '(标准化:', normalizedYmlVersion + ')');
+        }
+        
+        // 使用 API 获取的版本号进行比较（更可靠）
+        const versionComparison = compareVersion(normalizedApiVersion, normalizedCurrentVersion);
+        console.log('  - 比较结果 (API版本 vs 当前版本):', versionComparison);
+        
+        if (versionComparison <= 0) {
+            console.log('当前已是最新版本');
+            if (mainWindow) {
+                mainWindow.webContents.send('update-not-available', {
+                    currentVersion: currentVersion
+                });
+            }
+            return;
+        }
+        
+        // 如果 latest.yml 中的版本号与 API 获取的不一致，使用 API 的版本号更新 latest.yml
+        if (normalizedYmlVersion && normalizedYmlVersion !== normalizedApiVersion) {
+            console.log('警告: latest.yml 中的版本号与 API 获取的不一致，使用 API 版本号');
+            updateInfo.version = normalizedApiVersion;
+        } else if (!updateInfo.version) {
+            // 如果 latest.yml 中没有 version 字段，添加它
+            updateInfo.version = normalizedApiVersion;
+        }
+        
+        const updateVersion = normalizedApiVersion;
+        
+        console.log('发现新版本，准备更新');
+        
+        // 保存更新信息
+        currentUpdateInfo = updateInfo;
+        
+        // 将更新信息写入临时文件，供 electron-updater 使用
+        const tempYmlPath = path.join(app.getPath('temp'), 'latest.yml');
+        fs.writeFileSync(tempYmlPath, yaml.dump(updateInfo), 'utf8');
+        
+        // 使用本地文件作为 feedUrl
+        autoUpdater.setFeedURL({
+            provider: 'generic',
+            url: `file://${tempYmlPath.replace(/\\/g, '/')}`
+        });
+        
+        console.log('使用临时 latest.yml 文件:', tempYmlPath);
+        
+        // 触发 update-available 事件（因为我们已经手动解析了）
+        if (mainWindow) {
+            mainWindow.webContents.send('update-available', {
+                currentVersion: currentVersion,
+                version: updateVersion, // 使用标准化后的版本号
+                releaseDate: updateInfo.releaseDate ? updateInfo.releaseDate.split('T')[0] : '未知',
+                releaseNotes: updateInfo.releaseNotes || '暂无更新说明',
+                size: updateInfo.files?.[0]?.size ? formatSize(updateInfo.files[0].size) : '未知',
+                platform: getPlatformName()
+            });
         }
         
         // 检查更新
         await autoUpdater.checkForUpdates();
+        
     } catch (error) {
         console.error('检查更新失败:', error);
         event.reply('update-error', `检查更新失败: ${error.message}`);
     }
 });
 
+// 比较版本号
+function compareVersion(v1, v2) {
+    const parts1 = v1.replace(/^v/, '').split('.').map(Number);
+    const parts2 = v2.replace(/^v/, '').split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+        const p1 = parts1[i] || 0;
+        const p2 = parts2[i] || 0;
+        if (p1 > p2) return 1;
+        if (p1 < p2) return -1;
+    }
+    return 0;
+}
+
 // 存储当前更新信息（用于自定义下载）
 let currentUpdateInfo = null;
 
 // IPC: 开始下载更新
-// 注意：electron-updater 会使用 latest.yml 中的 URL 下载
-// latest.yml 从 Gitee 获取，但其中的安装包 URL 应该指向 GitHub
-// 我们通过修改 latest.yml 的 feed URL 来实现从 Gitee 获取元数据
+// electron-updater 会自动使用 latest.yml 中的 URL 下载
 ipcMain.on('download-update', async (event) => {
     console.log('开始下载更新...');
-    console.log('说明：latest.yml 从 Gitee 获取，安装包从 GitHub 下载（latest.yml 中的 URL）');
+    console.log('说明：latest.yml 从 Gitee 获取，安装包从 GitHub 下载（latest.yml 中的 URL 已指向 GitHub）');
     
     try {
         event.reply('update-downloading');
         // electron-updater 会自动使用 latest.yml 中的 URL 下载安装包
-        // 如果 latest.yml 中的 URL 指向 GitHub，下载就会从 GitHub 进行
-        // 如果需要使用镜像，需要在构建时修改 latest.yml 中的 URL
+        // latest.yml 中的 URL 已经在构建时修改为指向 GitHub Release
         await autoUpdater.downloadUpdate();
     } catch (error) {
         console.error('下载更新失败:', error);

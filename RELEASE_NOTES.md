@@ -54,5 +54,5 @@
 
 **开发者**：yejinxing  
 **邮箱**：yejinxing1728@qq.com  
-**开源协议**：MIT License
+**开源协议**：GPL-3.0 License
 

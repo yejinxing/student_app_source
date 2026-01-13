@@ -14,6 +14,13 @@ function fixYamlFile(filePath) {
         const content = fs.readFileSync(filePath, 'utf8');
         const data = yaml.load(content);
         
+        // 更新 version 字段（从 tag 中提取，移除 v 前缀）
+        const versionWithoutV = version.replace(/^v/, '');
+        if (data.version !== versionWithoutV) {
+            console.log(`  更新 version: ${data.version} -> ${versionWithoutV}`);
+            data.version = versionWithoutV;
+        }
+        
         // 修改 files 数组中的 url
         if (data.files && Array.isArray(data.files)) {
             data.files.forEach(file => {
