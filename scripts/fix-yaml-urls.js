@@ -5,6 +5,17 @@ const yaml = require('js-yaml');
 // 从环境变量获取版本号
 const version = process.env.VERSION || process.env.GITHUB_REF_NAME || 'v1.0.0';
 const githubBaseUrl = `https://github.com/yejinxing/student_app_source/releases/download/${version}`;
+const giteeBaseUrl = `https://gitee.com/yejinxing/student_app_source/releases/download/${version}`;
+
+// 判断文件是否是 blockmap 文件
+function isBlockmapFile(filename) {
+    return filename && filename.endsWith('.blockmap');
+}
+
+// 判断文件是否是元数据文件（yml/yaml）
+function isMetadataFile(filename) {
+    return filename && (filename.endsWith('.yml') || filename.endsWith('.yaml'));
+}
 
 function fixYamlFile(filePath) {
     if (!fs.existsSync(filePath)) return;
@@ -24,22 +35,53 @@ function fixYamlFile(filePath) {
         // 修改 files 数组中的 url
         if (data.files && Array.isArray(data.files)) {
             data.files.forEach(file => {
-                if (file.url && !file.url.startsWith('http')) {
-                    file.url = `${githubBaseUrl}/${file.url}`;
-                }
-                if (file.path) {
-                    if (!file.url) {
-                        file.url = `${githubBaseUrl}/${file.path}`;
+                const filename = file.url || file.path;
+                
+                // blockmap 文件和元数据文件从 Gitee 下载，安装包从 GitHub 下载
+                if (isBlockmapFile(filename) || isMetadataFile(filename)) {
+                    // blockmap 和元数据文件使用 Gitee
+                    if (file.url && !file.url.startsWith('http')) {
+                        file.url = `${giteeBaseUrl}/${file.url}`;
+                        console.log(`    设置 ${filename} URL 为 Gitee: ${file.url}`);
                     }
-                    delete file.path;
+                    if (file.path && !file.url) {
+                        file.url = `${giteeBaseUrl}/${file.path}`;
+                        console.log(`    设置 ${filename} URL 为 Gitee: ${file.url}`);
+                        delete file.path;
+                    }
+                } else {
+                    // 安装包文件使用 GitHub
+                    if (file.url && !file.url.startsWith('http')) {
+                        file.url = `${githubBaseUrl}/${file.url}`;
+                        console.log(`    设置 ${filename} URL 为 GitHub: ${file.url}`);
+                    }
+                    if (file.path) {
+                        if (!file.url) {
+                            file.url = `${githubBaseUrl}/${file.path}`;
+                            console.log(`    设置 ${filename} URL 为 GitHub: ${file.url}`);
+                        }
+                        delete file.path;
+                    }
                 }
             });
         }
         
         // 兼容旧格式：直接在根级别有 path
         if (data.path && !data.path.startsWith('http')) {
-            if (!data.url) {
-                data.url = `${githubBaseUrl}/${data.path}`;
+            const filename = data.path;
+            
+            // blockmap 文件和元数据文件从 Gitee 下载
+            if (isBlockmapFile(filename) || isMetadataFile(filename)) {
+                if (!data.url) {
+                    data.url = `${giteeBaseUrl}/${data.path}`;
+                    console.log(`    设置根级别 ${filename} URL 为 Gitee: ${data.url}`);
+                }
+            } else {
+                // 安装包文件从 GitHub 下载
+                if (!data.url) {
+                    data.url = `${githubBaseUrl}/${data.path}`;
+                    console.log(`    设置根级别 ${filename} URL 为 GitHub: ${data.url}`);
+                }
             }
             delete data.path;
         }

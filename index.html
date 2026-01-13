@@ -2631,11 +2631,28 @@
             
             // 使用 marked 渲染 Markdown 更新说明
             const releaseNotes = info.releaseNotes || '暂无更新说明';
+            const updateNotesElement = document.getElementById('update-notes');
             try {
-                document.getElementById('update-notes').innerHTML = marked.parse(releaseNotes);
+                updateNotesElement.innerHTML = marked.parse(releaseNotes);
+                
+                // 为所有链接添加点击事件，使其在外部浏览器中打开
+                const links = updateNotesElement.querySelectorAll('a');
+                links.forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const url = link.href;
+                        if (url) {
+                            // 通过 IPC 在主进程中打开外部链接
+                            ipcRenderer.send('open-external-url', url);
+                        }
+                    });
+                    // 添加鼠标悬停样式提示
+                    link.style.cursor = 'pointer';
+                    link.title = '点击在浏览器中打开';
+                });
             } catch (e) {
                 // 如果 marked 渲染失败，回退到纯文本
-                document.getElementById('update-notes').textContent = releaseNotes;
+                updateNotesElement.textContent = releaseNotes;
             }
             
             console.log('更新信息:', info);

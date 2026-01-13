@@ -120,6 +120,27 @@ jobs:
       - name: List dist files
         run: ls -la dist/ || echo "No dist folder"
 
+      # 合并所有平台的 yml 文件为一个统一的 latest.yml
+      - name: Merge platform yml files
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          # 安装 js-yaml（如果还没有）
+          npm install --no-save js-yaml || true
+          
+          # 执行合并脚本
+          node scripts/merge-yaml-files.js
+        env:
+          VERSION: ${{ github.ref_name }}
+
+      # 修改合并后的 latest.yml 中的 URL（安装包指向 GitHub，blockmap 指向 Gitee）
+      - name: Fix merged latest.yml URLs
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          # 执行脚本（脚本文件已存在于项目中）
+          node scripts/fix-yaml-urls.js
+        env:
+          VERSION: ${{ github.ref_name }}
+
       # 创建 GitHub Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1

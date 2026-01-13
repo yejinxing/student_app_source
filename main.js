@@ -181,7 +181,12 @@ async function getLatestVersionFromGitee() {
         
         try {
             const release = JSON.parse(data);
-            return release.tag_name;
+            // 返回完整的 release 信息，包括 tag_name 和 body (release notes)
+            return {
+                tag_name: release.tag_name,
+                body: release.body || '',
+                published_at: release.published_at || release.created_at
+            };
         } catch (e) {
             throw new Error(`解析 JSON 失败: ${e.message}`);
         }
@@ -196,13 +201,8 @@ async function getLatestVersionFromGitee() {
 const platform = process.platform;
 
 // 初始化时设置一个默认的 feedUrl（会在检查更新时更新）
+// 现在所有平台都使用统一的 latest.yml（包含所有平台的文件信息）
 let feedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/latest/latest.yml`;
-
-if (platform === 'darwin') {
-    feedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/latest/latest-mac.yml`;
-} else if (platform === 'linux') {
-    feedUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/latest/latest-linux.yml`;
-}
 
 // 设置更新源（使用 Gitee）
 autoUpdater.setFeedURL({
@@ -293,6 +293,9 @@ autoUpdater.on('checking-for-update', () => {
     console.log('正在检查更新...');
 });
 
+// 存储手动获取的 release notes（在 check-for-updates 中设置）
+let manualReleaseInfo = null;
+
 autoUpdater.on('update-available', (info) => {
     console.log('发现新版本:', info.version);
     updateInfo = info;
@@ -310,14 +313,21 @@ autoUpdater.on('update-available', (info) => {
     }
     
     if (mainWindow) {
+        // 优先使用手动获取的 release notes（如果存在）
+        const finalReleaseNotes = manualReleaseInfo?.releaseNotes || info.releaseNotes || '暂无更新说明';
+        const finalReleaseDate = manualReleaseInfo?.releaseDate || (info.releaseDate ? info.releaseDate.split('T')[0] : '未知');
+        
         mainWindow.webContents.send('update-available', {
             currentVersion: app.getVersion(),
             version: info.version,
-            releaseDate: info.releaseDate ? info.releaseDate.split('T')[0] : '未知',
-            releaseNotes: info.releaseNotes || '暂无更新说明',
+            releaseDate: finalReleaseDate,
+            releaseNotes: finalReleaseNotes,
             size: formatSize(info.files?.[0]?.size),
             platform: getPlatformName()
         });
+        
+        // 清除手动获取的信息（避免影响下次检查）
+        manualReleaseInfo = null;
     }
 });
 
@@ -367,21 +377,13 @@ autoUpdater.on('error', (err) => {
     }
 });
 
-// 手动下载并解析 latest.yml
+// 手动下载并解析 latest.yml（现在所有平台都使用统一的 latest.yml）
 async function fetchUpdateInfo(version) {
     try {
-        let ymlFileName;
-        if (platform === 'win32') {
-            ymlFileName = 'latest.yml';
-        } else if (platform === 'darwin') {
-            ymlFileName = 'latest-mac.yml';
-        } else {
-            ymlFileName = 'latest-linux.yml';
-        }
-        
+        const ymlFileName = 'latest.yml';
         const ymlUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${version}/${ymlFileName}`;
         
-        console.log('从 Gitee 下载 latest.yml:', ymlUrl);
+        console.log('从 Gitee 下载 latest.yml (统一文件，包含所有平台):', ymlUrl);
         
         const yaml = require('js-yaml');
         const data = await httpGet(ymlUrl);
@@ -401,32 +403,27 @@ async function fetchUpdateInfo(version) {
 ipcMain.on('check-for-updates', async (event) => {
     console.log('开始检查更新...');
     try {
-        // 先从 Gitee 获取最新版本号
-        const latestVersion = await getLatestVersionFromGitee();
+        // 先从 Gitee 获取最新版本信息（包括版本号和 release notes）
+        const latestRelease = await getLatestVersionFromGitee();
         
-        if (!latestVersion) {
+        if (!latestRelease || !latestRelease.tag_name) {
             throw new Error('无法从 Gitee 获取最新版本号');
         }
         
-        console.log('Gitee 最新版本:', latestVersion);
+        const latestVersion = latestRelease.tag_name;
+        const releaseNotes = latestRelease.body || '';
+        const releaseDate = latestRelease.published_at || '';
         
-        // 构造完整的 latest.yml URL
-        // electron-updater 的 generic provider 会在 URL 后追加 /latest.yml
-        // 所以我们需要提供目录路径，而不是文件路径
-        let ymlFileName;
-        if (platform === 'win32') {
-            ymlFileName = 'latest.yml';
-        } else if (platform === 'darwin') {
-            ymlFileName = 'latest-mac.yml';
-        } else {
-            ymlFileName = 'latest-linux.yml';
+        console.log('Gitee 最新版本:', latestVersion);
+        if (releaseNotes) {
+            console.log('Release Notes 长度:', releaseNotes.length);
         }
         
-        // 提供目录路径（以 / 结尾），electron-updater 会追加 latest.yml
-        // 但我们需要它追加的是 latest-mac.yml 等，所以需要特殊处理
-        // 实际上，electron-updater 总是追加 latest.yml，所以我们需要手动下载
+        // 现在所有平台都使用统一的 latest.yml（包含所有平台的文件信息）
+        // electron-updater 会根据当前运行平台自动选择对应的文件
+        const ymlFileName = 'latest.yml';
         
-        // 方案：手动下载 latest.yml，然后使用临时文件
+        // 手动下载 latest.yml（因为 electron-updater 的 generic provider 会自动追加 /latest.yml）
         const yaml = require('js-yaml');
         const updateInfo = await fetchUpdateInfo(latestVersion);
         
@@ -482,32 +479,64 @@ ipcMain.on('check-for-updates', async (event) => {
         // 保存更新信息
         currentUpdateInfo = updateInfo;
         
-        // 将更新信息写入临时文件，供 electron-updater 使用
-        const tempYmlPath = path.join(app.getPath('temp'), 'latest.yml');
-        fs.writeFileSync(tempYmlPath, yaml.dump(updateInfo), 'utf8');
+        // 构造 Gitee 的目录 URL（用于 electron-updater）
+        // 注意：electron-updater 的 generic provider 会自动在 URL 后追加 /latest.yml
+        // 现在所有平台都使用统一的 latest.yml（包含所有平台的文件信息）
+        // electron-updater 会根据当前运行平台自动选择对应的文件
+        const giteeDirUrl = `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${apiVersion}/`;
         
-        // 使用本地文件作为 feedUrl
+        // 设置更新源为 Gitee 目录 URL（electron-updater 会自动追加 latest.yml）
         autoUpdater.setFeedURL({
             provider: 'generic',
-            url: `file://${tempYmlPath.replace(/\\/g, '/')}`
+            url: giteeDirUrl
         });
         
-        console.log('使用临时 latest.yml 文件:', tempYmlPath);
+        console.log('设置更新源目录 URL:', giteeDirUrl);
+        console.log('注意: electron-updater 会自动追加 latest.yml，实际请求:', giteeDirUrl + 'latest.yml');
+        console.log('latest.yml 包含所有平台的文件信息，electron-updater 会根据当前平台自动选择');
         
-        // 触发 update-available 事件（因为我们已经手动解析了）
-        if (mainWindow) {
-            mainWindow.webContents.send('update-available', {
-                currentVersion: currentVersion,
-                version: updateVersion, // 使用标准化后的版本号
-                releaseDate: updateInfo.releaseDate ? updateInfo.releaseDate.split('T')[0] : '未知',
-                releaseNotes: updateInfo.releaseNotes || '暂无更新说明',
-                size: updateInfo.files?.[0]?.size ? formatSize(updateInfo.files[0].size) : '未知',
-                platform: getPlatformName()
-            });
+        // 保存手动获取的 release notes 和日期，供 update-available 事件使用
+        const manualReleaseNotes = releaseNotes || updateInfo.releaseNotes || '暂无更新说明';
+        const manualReleaseDate = releaseDate 
+            ? releaseDate.split('T')[0] 
+            : (updateInfo.releaseDate ? updateInfo.releaseDate.split('T')[0] : '未知');
+        
+        // 保存手动获取的信息，供 update-available 事件使用
+        manualReleaseInfo = {
+            releaseNotes: manualReleaseNotes,
+            releaseDate: manualReleaseDate
+        };
+        
+        // 需要调用 checkForUpdates() 来更新 electron-updater 的内部状态
+        // 这样 downloadUpdate() 才能正常工作
+        // 在 update-available 事件中，我们会使用手动获取的 release notes
+        try {
+            const checkResult = await autoUpdater.checkForUpdates();
+            console.log('已更新 electron-updater 内部状态');
+            console.log('检查结果:', checkResult ? `更新可用: ${checkResult.updateInfo?.version}` : '无更新');
+        } catch (checkError) {
+            console.error('checkForUpdates() 调用失败:', checkError);
+            // 如果 checkForUpdates 失败，我们需要确保 electron-updater 知道有更新可用
+            // 手动触发 update-available 事件，并保存更新信息
+            if (mainWindow) {
+                // 确保 currentUpdateInfo 已设置，这样 downloadUpdate() 可以使用它
+                currentUpdateInfo = updateInfo;
+                
+                mainWindow.webContents.send('update-available', {
+                    currentVersion: currentVersion,
+                    version: updateVersion,
+                    releaseDate: manualReleaseDate,
+                    releaseNotes: manualReleaseNotes,
+                    size: updateInfo.files?.[0]?.size ? formatSize(updateInfo.files[0].size) : '未知',
+                    platform: getPlatformName()
+                });
+                manualReleaseInfo = null; // 清除
+            }
+            
+            // 即使 checkForUpdates 失败，我们也尝试继续
+            // downloadUpdate() 可能会失败，但我们可以提示用户手动下载
+            console.warn('警告: checkForUpdates() 失败，下载可能会失败。如果下载失败，请手动从 GitHub Release 下载。');
         }
-        
-        // 检查更新
-        await autoUpdater.checkForUpdates();
         
     } catch (error) {
         console.error('检查更新失败:', error);
@@ -533,19 +562,40 @@ function compareVersion(v1, v2) {
 let currentUpdateInfo = null;
 
 // IPC: 开始下载更新
-// electron-updater 会自动使用 latest.yml 中的 URL 下载
+// 下载逻辑说明：
+// 1. latest.yml 等元数据文件从 Gitee 下载（文件小，国内访问快）
+// 2. 安装包（.exe, .dmg, .AppImage 等）从 GitHub 下载（latest.yml 中的 URL 已指向 GitHub）
+// 3. blockmap 文件从 Gitee 下载（用于增量更新验证，文件小，国内访问快）
 ipcMain.on('download-update', async (event) => {
     console.log('开始下载更新...');
-    console.log('说明：latest.yml 从 Gitee 获取，安装包从 GitHub 下载（latest.yml 中的 URL 已指向 GitHub）');
+    console.log('下载逻辑：');
+    console.log('  - 元数据文件（latest.yml 等）：从 Gitee 下载（已通过 checkForUpdates 获取）');
+    console.log('  - 安装包文件（.exe/.dmg/.AppImage 等）：从 GitHub 下载（latest.yml 中的 URL）');
+    console.log('  - blockmap 文件：从 Gitee 下载（用于增量更新验证，文件小，国内访问快）');
     
     try {
+        // 检查是否有更新信息
+        if (!currentUpdateInfo) {
+            throw new Error('没有可用的更新信息，请先检查更新');
+        }
+        
         event.reply('update-downloading');
+        
         // electron-updater 会自动使用 latest.yml 中的 URL 下载安装包
-        // latest.yml 中的 URL 已经在构建时修改为指向 GitHub Release
+        // latest.yml 中的 URL 已经在构建时通过 fix-yaml-urls.js 修改为指向 GitHub Release
+        // 格式：https://github.com/yejinxing/student_app_source/releases/download/v1.0.2/StudentInfoTool-Setup-1.0.2.exe
         await autoUpdater.downloadUpdate();
+        console.log('下载更新成功');
     } catch (error) {
         console.error('下载更新失败:', error);
-        event.reply('update-error', `下载失败: ${error.message}`);
+        const errorMessage = error.message || '未知错误';
+        
+        // 如果是因为没有检查更新，提供更详细的错误信息
+        if (errorMessage.includes('check update first') || errorMessage.includes('Please check update')) {
+            event.reply('update-error', `下载失败: 请先检查更新。如果问题持续，请手动从 GitHub Release 页面下载安装包。`);
+        } else {
+            event.reply('update-error', `下载失败: ${errorMessage}`);
+        }
     }
 });
 
