@@ -1987,6 +1987,9 @@
                     <div class="update-progress-detail" id="update-progress-detail" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
                         准备下载...
                     </div>
+                    <div id="update-mirror-info" style="font-size: 11px; color: var(--primary); margin-top: 4px; display: none;">
+                        <span style="background: var(--primary-light); padding: 2px 8px; border-radius: 4px;">正在使用镜像加速</span>
+                    </div>
                 </div>
                 <p class="update-hint">下载完成后将自动提示安装</p>
                 <button class="update-btn update-btn-secondary" onclick="cancelDownload()" style="margin-top: 12px;">取消下载</button>
@@ -2690,7 +2693,16 @@
             // 显示更多下载信息
             const detailEl = document.getElementById('update-progress-detail');
             if (detailEl) {
-                detailEl.textContent = `${progress.downloaded} / ${progress.total} · 剩余 ${progress.remaining}`;
+                const downloaded = progress.downloaded || `${(progress.transferred / (1024 * 1024)).toFixed(2)} MB`;
+                const total = progress.totalSize || progress.total || '未知';
+                detailEl.textContent = `${downloaded} / ${total}`;
+            }
+            
+            // 显示镜像加速信息
+            const mirrorEl = document.getElementById('update-mirror-info');
+            if (mirrorEl && progress.mirrorName) {
+                mirrorEl.style.display = 'block';
+                mirrorEl.innerHTML = `<span style="background: var(--primary-light); padding: 2px 8px; border-radius: 4px;">🚀 镜像加速: ${progress.mirrorName}</span>`;
             }
         });
         

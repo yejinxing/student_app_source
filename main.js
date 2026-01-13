@@ -131,6 +131,143 @@ const GITHUB_MIRRORS = [
     { name: '直连', prefix: '' }
 ];
 
+// 通过镜像下载文件（支持进度回调）
+function downloadFileWithMirror(originalUrl, destPath, onProgress) {
+    return new Promise(async (resolve, reject) => {
+        // 尝试每个镜像
+        for (let i = 0; i < GITHUB_MIRRORS.length; i++) {
+            const mirror = GITHUB_MIRRORS[i];
+            const url = mirror.prefix ? mirror.prefix + originalUrl : originalUrl;
+            
+            console.log(`尝试从 ${mirror.name} 下载: ${url}`);
+            
+            try {
+                await downloadFile(url, destPath, onProgress, mirror.name);
+                console.log(`✓ 从 ${mirror.name} 下载成功`);
+                resolve({ success: true, mirror: mirror.name });
+                return;
+            } catch (e) {
+                console.warn(`从 ${mirror.name} 下载失败: ${e.message}`);
+                // 如果不是最后一个镜像，继续尝试下一个
+                if (i < GITHUB_MIRRORS.length - 1) {
+                    console.log('尝试下一个镜像...');
+                }
+            }
+        }
+        
+        reject(new Error('所有镜像下载都失败'));
+    });
+}
+
+// 下载文件到指定路径（支持进度回调）
+function downloadFile(url, destPath, onProgress, mirrorName) {
+    return new Promise((resolve, reject) => {
+        const urlObj = new URL(url);
+        const client = urlObj.protocol === 'https:' ? require('https') : require('http');
+        
+        const requestOptions = {
+            hostname: urlObj.hostname,
+            port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+            path: urlObj.pathname + urlObj.search,
+            method: 'GET',
+            headers: {
+                'User-Agent': 'StudentApp/' + app.getVersion()
+            },
+            timeout: 30000 // 30秒超时（连接超时，下载时间不限）
+        };
+        
+        const req = client.request(requestOptions, (res) => {
+            // 处理重定向
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                const redirectUrl = res.headers.location;
+                const absoluteUrl = redirectUrl.startsWith('http') 
+                    ? redirectUrl 
+                    : `${urlObj.protocol}//${urlObj.hostname}${redirectUrl}`;
+                
+                console.log(`跟随重定向: ${absoluteUrl}`);
+                downloadFile(absoluteUrl, destPath, onProgress, mirrorName)
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+            
+            if (res.statusCode !== 200) {
+                reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+                return;
+            }
+            
+            const totalSize = parseInt(res.headers['content-length'], 10) || 0;
+            let downloadedSize = 0;
+            let lastProgressTime = Date.now();
+            
+            // 确保目录存在
+            const dir = path.dirname(destPath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            
+            const fileStream = fs.createWriteStream(destPath);
+            
+            res.on('data', (chunk) => {
+                downloadedSize += chunk.length;
+                fileStream.write(chunk);
+                
+                // 限制进度回调频率（每200ms一次）
+                const now = Date.now();
+                if (onProgress && totalSize > 0 && (now - lastProgressTime > 200)) {
+                    lastProgressTime = now;
+                    const percent = Math.round((downloadedSize / totalSize) * 100);
+                    const downloadedMB = (downloadedSize / (1024 * 1024)).toFixed(2);
+                    const totalMB = (totalSize / (1024 * 1024)).toFixed(2);
+                    onProgress({
+                        percent,
+                        transferred: downloadedSize,
+                        total: totalSize,
+                        bytesPerSecond: 0, // 暂不计算速度
+                        mirrorName,
+                        downloadedMB,
+                        totalMB
+                    });
+                }
+            });
+            
+            res.on('end', () => {
+                fileStream.end();
+                // 最后一次进度更新
+                if (onProgress && totalSize > 0) {
+                    onProgress({
+                        percent: 100,
+                        transferred: totalSize,
+                        total: totalSize,
+                        bytesPerSecond: 0,
+                        mirrorName,
+                        downloadedMB: (totalSize / (1024 * 1024)).toFixed(2),
+                        totalMB: (totalSize / (1024 * 1024)).toFixed(2)
+                    });
+                }
+                resolve();
+            });
+            
+            res.on('error', (err) => {
+                fileStream.close();
+                fs.unlink(destPath, () => {}); // 删除不完整的文件
+                reject(err);
+            });
+        });
+        
+        req.on('error', (err) => {
+            reject(err);
+        });
+        
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('连接超时'));
+        });
+        
+        req.end();
+    });
+}
+
 // 配置 autoUpdater - 从 Gitee 获取元数据，从 GitHub 镜像下载安装包
 autoUpdater.autoDownload = false; // 不自动下载，等用户确认
 autoUpdater.autoInstallOnAppQuit = false; // 不在退出时自动安装，我们手动控制
@@ -1052,25 +1189,103 @@ ipcMain.on('download-update', async (event) => {
         
         event.reply('update-downloading');
         
-        // electron-updater 会自动使用 latest.yml 中的 URL 下载安装包
-        // latest.yml 中的 URL 已经在构建时通过 fix-yaml-urls.js 修改为指向 GitHub Release
-        // 格式：https://github.com/yejinxing/student_app_source/releases/download/v1.0.2/StudentInfoTool-Setup-1.0.2.exe
-        await autoUpdater.downloadUpdate();
-        console.log('下载更新成功');
+        // 使用自定义下载，通过镜像加速
+        // 从更新信息中获取下载 URL
+        let downloadUrl = null;
+        let fileName = null;
         
-        // 检查安装包下载位置（用于记录，安装后清理）
-        const defaultPendingDir = path.join(app.getPath('userData'), 'pending');
-        const updaterCacheDir = path.join(app.getPath('userData'), app.getName() + '-updater');
-        const updaterPendingDir = path.join(updaterCacheDir, 'pending');
-        
-        console.log('=== 安装包下载位置 ===');
-        if (fs.existsSync(updaterPendingDir)) {
-            console.log('安装包位置:', updaterPendingDir);
-        } else if (fs.existsSync(defaultPendingDir)) {
-            console.log('安装包位置:', defaultPendingDir);
-        } else {
-            console.warn('警告: 未找到下载的安装包文件');
+        if (currentUpdateInfo.files && currentUpdateInfo.files.length > 0) {
+            // 找到当前平台对应的文件
+            const platformFile = currentUpdateInfo.files.find(f => {
+                const url = f.url || '';
+                if (process.platform === 'win32') {
+                    return url.includes('.exe') && url.includes('Setup');
+                } else if (process.platform === 'darwin') {
+                    return url.includes('.dmg');
+                } else {
+                    return url.includes('.AppImage');
+                }
+            });
+            
+            if (platformFile) {
+                downloadUrl = platformFile.url;
+                fileName = path.basename(downloadUrl);
+            }
         }
+        
+        // 如果没找到，尝试从版本信息构造 URL
+        if (!downloadUrl && currentUpdateInfo.version) {
+            const version = currentUpdateInfo.version;
+            if (process.platform === 'win32') {
+                fileName = `StudentInfoTool-Setup-${version}.exe`;
+                downloadUrl = `https://github.com/${OWNER}/${REPO_NAME}/releases/download/v${version}/${fileName}`;
+            } else if (process.platform === 'darwin') {
+                fileName = `StudentInfoTool-${version}.dmg`;
+                downloadUrl = `https://github.com/${OWNER}/${REPO_NAME}/releases/download/v${version}/${fileName}`;
+            } else {
+                fileName = `StudentInfoTool-${version}.AppImage`;
+                downloadUrl = `https://github.com/${OWNER}/${REPO_NAME}/releases/download/v${version}/${fileName}`;
+            }
+        }
+        
+        if (!downloadUrl) {
+            throw new Error('无法获取下载链接');
+        }
+        
+        console.log('=== 使用镜像加速下载 ===');
+        console.log('原始下载链接:', downloadUrl);
+        console.log('文件名:', fileName);
+        
+        // 设置下载目标路径
+        const pendingDir = path.join(downloadDir, 'pending');
+        if (!fs.existsSync(pendingDir)) {
+            fs.mkdirSync(pendingDir, { recursive: true });
+        }
+        const destPath = path.join(pendingDir, fileName);
+        
+        // 保存下载路径，供安装时使用
+        global.downloadedInstallerPath = destPath;
+        
+        console.log('下载目标路径:', destPath);
+        
+        // 使用镜像下载
+        const result = await downloadFileWithMirror(downloadUrl, destPath, (progress) => {
+            // 发送下载进度到前端（使用与 electron-updater 兼容的格式）
+            if (mainWindow) {
+                mainWindow.webContents.send('update-progress', {
+                    percent: progress.percent,
+                    transferred: progress.transferred,
+                    total: progress.total,
+                    bytesPerSecond: progress.bytesPerSecond,
+                    // 格式化为前端期望的格式
+                    downloaded: `${progress.downloadedMB} MB`,
+                    totalSize: `${progress.totalMB} MB`,
+                    speed: progress.bytesPerSecond > 0 ? `${(progress.bytesPerSecond / 1024).toFixed(1)} KB/s` : '计算中...',
+                    remaining: '计算中...',
+                    mirrorName: progress.mirrorName
+                });
+            }
+        });
+        
+        console.log(`✓ 下载成功，使用镜像: ${result.mirror}`);
+        console.log('安装包位置:', destPath);
+        
+        // 验证文件是否存在
+        if (!fs.existsSync(destPath)) {
+            throw new Error('下载完成但文件不存在');
+        }
+        
+        const fileSize = fs.statSync(destPath).size;
+        console.log('文件大小:', (fileSize / (1024 * 1024)).toFixed(2), 'MB');
+        
+        // 通知前端下载完成
+        if (mainWindow) {
+            mainWindow.webContents.send('update-downloaded', {
+                version: currentUpdateInfo.version,
+                installerPath: destPath
+            });
+        }
+        
         console.log('注意: 安装完成后，应用会自动清理安装包，避免占用磁盘空间');
     } catch (error) {
         console.error('下载更新失败:', error);
@@ -1080,7 +1295,7 @@ ipcMain.on('download-update', async (event) => {
         if (errorMessage.includes('check update first') || errorMessage.includes('Please check update')) {
             event.reply('update-error', `下载失败: 请先检查更新。如果问题持续，请手动从 GitHub Release 页面下载安装包。`);
         } else {
-            event.reply('update-error', `下载失败: ${errorMessage}`);
+            event.reply('update-error', `下载失败: ${errorMessage}。请检查网络连接或尝试手动下载。`);
         }
     }
 });
@@ -1090,16 +1305,69 @@ ipcMain.on('install-update', (event) => {
     console.log('准备安装更新...');
     console.log('注意: 安装完成后，应用启动时会自动清理安装包，避免占用磁盘空间');
     
-    // 注意：不要在这里清理缓存，因为 electron-updater 需要 pending 目录中的文件来安装
-    // 清理标记已经记录在 cleanup-marker.json 中，应用启动时会自动清理
+    // 检查是否有自定义下载的安装包
+    const installerPath = global.downloadedInstallerPath;
     
-    // 退出并安装
-    // setImmediate 确保在下一个事件循环中执行，让前端有时间响应
-    setImmediate(() => {
-        // isSilent=true: 静默安装（Windows 使用 /S 参数）
-        // isForceRunAfter=true: 安装后自动启动应用
-        autoUpdater.quitAndInstall(true, true);
-    });
+    if (installerPath && fs.existsSync(installerPath)) {
+        console.log('使用自定义下载的安装包:', installerPath);
+        
+        // 记录清理标记
+        const cleanupMarkerPath = path.join(app.getPath('userData'), 'cleanup-marker.json');
+        try {
+            const marker = {
+                timestamp: new Date().toISOString(),
+                installerPath: installerPath,
+                downloadDir: path.dirname(installerPath)
+            };
+            fs.writeFileSync(cleanupMarkerPath, JSON.stringify(marker, null, 2));
+            console.log('已记录清理标记:', cleanupMarkerPath);
+        } catch (e) {
+            console.warn('记录清理标记失败:', e.message);
+        }
+        
+        // 运行安装程序
+        setImmediate(() => {
+            const { spawn } = require('child_process');
+            
+            if (process.platform === 'win32') {
+                // Windows: 使用 /S 静默安装，/D 指定安装目录（可选）
+                console.log('启动安装程序（静默模式）...');
+                const installer = spawn(installerPath, ['/S'], {
+                    detached: true,
+                    stdio: 'ignore',
+                    windowsHide: false
+                });
+                installer.unref();
+            } else if (process.platform === 'darwin') {
+                // macOS: 打开 DMG 文件
+                const { shell } = require('electron');
+                shell.openPath(installerPath);
+            } else {
+                // Linux: 给 AppImage 添加执行权限并运行
+                const { execSync } = require('child_process');
+                execSync(`chmod +x "${installerPath}"`);
+                const installer = spawn(installerPath, [], {
+                    detached: true,
+                    stdio: 'ignore'
+                });
+                installer.unref();
+            }
+            
+            // 延迟退出，确保安装程序已启动
+            setTimeout(() => {
+                console.log('退出应用，等待安装完成...');
+                app.quit();
+            }, 1000);
+        });
+    } else {
+        // 回退到 electron-updater 的默认安装方式
+        console.log('使用 electron-updater 默认安装方式');
+        setImmediate(() => {
+            // isSilent=true: 静默安装（Windows 使用 /S 参数）
+            // isForceRunAfter=true: 安装后自动启动应用
+            autoUpdater.quitAndInstall(true, true);
+        });
+    }
 });
 
 // IPC: 取消下载
