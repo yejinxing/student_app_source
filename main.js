@@ -217,7 +217,25 @@ console.log('  - 安装包: GitHub (latest.yml 中的 URL，支持镜像加速)'
 // 开发模式下也允许检查更新（用于测试）
 if (!app.isPackaged) {
     autoUpdater.forceDevUpdateConfig = true;
+    
+    // 在开发模式下，如果 dev-app-update.yml 不存在，创建一个指向 Gitee 的配置文件
+    const devUpdateConfigPath = path.join(__dirname, 'dev-app-update.yml');
+    if (!fs.existsSync(devUpdateConfigPath)) {
+        try {
+            const yaml = require('js-yaml');
+            const devConfig = {
+                provider: 'generic',
+                url: `https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/latest/`
+            };
+            fs.writeFileSync(devUpdateConfigPath, yaml.dump(devConfig), 'utf8');
+            console.log('[AutoUpdater] 开发模式：已创建 dev-app-update.yml');
+        } catch (e) {
+            console.warn('[AutoUpdater] 开发模式：创建 dev-app-update.yml 失败:', e.message);
+        }
+    }
+    
     console.log('[AutoUpdater] 开发模式：已启用更新检查');
+    console.log('[AutoUpdater] 开发模式：将使用 dev-app-update.yml 或 setFeedURL 设置的 URL');
 }
 
 // 配置日志

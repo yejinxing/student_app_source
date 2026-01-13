@@ -1,0 +1,7 @@
+# 开发模式下的更新配置文件
+# 这个文件用于开发模式，指向 Gitee 的更新源
+# 注意：这个文件只在开发模式下使用，生产环境使用 setFeedURL 设置的 URL
+
+provider: generic
+url: https://gitee.com/yejinxing/student_app_source/releases/download/latest/
+
