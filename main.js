@@ -1003,6 +1003,15 @@ ipcMain.on('download-update', async (event) => {
     console.log('  - 安装包文件（.exe/.dmg/.AppImage 等）：从 GitHub 下载（latest.yml 中的 URL）');
     console.log('  - blockmap 文件：从 Gitee 下载（用于增量更新验证，文件小，国内访问快）');
     
+    // 在下载前先清理旧的安装包，避免不同版本共存占用磁盘空间
+    console.log('=== 下载前清理旧安装包 ===');
+    try {
+        await cleanupUpdateCache();
+        console.log('✓ 旧安装包清理完成');
+    } catch (e) {
+        console.warn('清理旧安装包失败（不影响下载）:', e.message);
+    }
+    
     // 在下载前检测当前应用位置并设置下载目录
     console.log('=== 检测应用安装位置 ===');
     const exePath = app.getPath('exe');
@@ -1353,6 +1362,33 @@ ipcMain.on('get-cache-size', async (event) => {
         
         totalSize += await getDirSize(defaultPendingDir);
         totalSize += await getDirSize(updaterCacheDir);
+        
+        // 4. 下载目录中的安装包（resources 目录）
+        const resourcesDir = getDownloadDir();
+        if (fs.existsSync(resourcesDir)) {
+            try {
+                const files = await fs.readdir(resourcesDir);
+                for (const file of files) {
+                    // 只统计安装包文件（.exe, .dmg, .AppImage, .deb, .rpm 等）
+                    if (file.match(/\.(exe|dmg|AppImage|deb|rpm|blockmap)$/i)) {
+                        const filePath = path.join(resourcesDir, file);
+                        try {
+                            const stat = await fs.stat(filePath);
+                            if (!stat.isDirectory()) {
+                                totalSize += stat.size;
+                            }
+                        } catch (e) {
+                            console.warn(`无法获取安装包大小: ${filePath}`, e.message);
+                        }
+                    }
+                }
+                // 也检查 pending 子目录
+                const pendingDir = path.join(resourcesDir, 'pending');
+                totalSize += await getDirSize(pendingDir);
+            } catch (e) {
+                console.warn('获取 resources 目录安装包大小失败:', e.message);
+            }
+        }
         
         // 格式化大小
         let sizeStr;
