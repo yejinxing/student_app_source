@@ -111,6 +111,26 @@ const GITHUB_MIRRORS = [
 autoUpdater.autoDownload = false; // 不自动下载，等用户确认
 autoUpdater.autoInstallOnAppQuit = false; // 不在退出时自动安装，我们手动控制
 
+// 设置安装包下载目录为项目目录的 resources 文件夹
+// 开发模式：项目根目录/resources
+// 打包模式：应用安装目录/resources
+const downloadDir = app.isPackaged 
+    ? path.join(path.dirname(app.getPath('exe')), 'resources')
+    : path.join(__dirname, 'resources');
+
+// 确保下载目录存在
+try {
+    if (!fs.existsSync(downloadDir)) {
+        fs.mkdirSync(downloadDir, { recursive: true });
+        console.log('[AutoUpdater] 已创建下载目录:', downloadDir);
+    }
+    // 设置 electron-updater 的缓存目录
+    autoUpdater.cacheDir = downloadDir;
+    console.log('[AutoUpdater] 安装包下载目录:', downloadDir);
+} catch (e) {
+    console.warn('[AutoUpdater] 设置下载目录失败:', e.message);
+}
+
 // 通用的 HTTP GET 请求函数，支持重定向
 function httpGet(url, options = {}, maxRedirects = 5) {
     return new Promise((resolve, reject) => {
@@ -275,21 +295,22 @@ function getPlatformName() {
 // 清理更新缓存目录
 function cleanupUpdateCache() {
     try {
-        // electron-updater 的下载缓存目录
+        // 清理 electron-updater 的默认缓存目录（userData/pending）
         const updateCacheDir = path.join(app.getPath('userData'), 'pending');
         if (fs.existsSync(updateCacheDir)) {
             fs.removeSync(updateCacheDir);
-            console.log('已清理更新缓存目录:', updateCacheDir);
+            console.log('已清理默认更新缓存目录:', updateCacheDir);
         }
         
-        // 清理可能存在的旧安装包（兼容旧版本）
+        // 清理项目 resources 目录中的旧安装包
         const resourcesDir = app.isPackaged 
             ? path.join(path.dirname(app.getPath('exe')), 'resources')
-            : app.getPath('temp');
+            : path.join(__dirname, 'resources');
             
         if (fs.existsSync(resourcesDir)) {
             const files = fs.readdirSync(resourcesDir);
             files.forEach(file => {
+                // 清理安装包文件（.exe, .dmg, .AppImage, .deb, .rpm 等）
                 if (file.match(/\.(exe|dmg|AppImage|deb|rpm)$/i) && file.includes('StudentInfoTool')) {
                     const filePath = path.join(resourcesDir, file);
                     try {
@@ -297,6 +318,17 @@ function cleanupUpdateCache() {
                         console.log('已清理旧安装包:', filePath);
                     } catch (e) {
                         console.log('清理文件失败:', filePath, e.message);
+                    }
+                }
+                // 清理 electron-updater 创建的临时目录（pending 目录）
+                const filePath = path.join(resourcesDir, file);
+                const stat = fs.statSync(filePath);
+                if (stat.isDirectory() && file === 'pending') {
+                    try {
+                        fs.removeSync(filePath);
+                        console.log('已清理 pending 目录:', filePath);
+                    } catch (e) {
+                        console.log('清理目录失败:', filePath, e.message);
                     }
                 }
             });
@@ -381,6 +413,12 @@ autoUpdater.on('download-progress', (progressObj) => {
 
 autoUpdater.on('update-downloaded', (info) => {
     console.log('更新下载完成:', info.version);
+    const downloadDir = app.isPackaged 
+        ? path.join(path.dirname(app.getPath('exe')), 'resources')
+        : path.join(__dirname, 'resources');
+    console.log('安装包位置:', downloadDir);
+    console.log('注意: 安装完成后，electron-updater 会自动清理安装包文件');
+    
     if (mainWindow) {
         mainWindow.webContents.send('update-downloaded', {
             version: info.version
@@ -591,6 +629,12 @@ ipcMain.on('download-update', async (event) => {
     console.log('  - 安装包文件（.exe/.dmg/.AppImage 等）：从 GitHub 下载（latest.yml 中的 URL）');
     console.log('  - blockmap 文件：从 Gitee 下载（用于增量更新验证，文件小，国内访问快）');
     
+    // 显示下载目录
+    const downloadDir = app.isPackaged 
+        ? path.join(path.dirname(app.getPath('exe')), 'resources')
+        : path.join(__dirname, 'resources');
+    console.log('  - 安装包保存位置:', downloadDir);
+    
     try {
         // 检查是否有更新信息
         if (!currentUpdateInfo) {
@@ -604,6 +648,7 @@ ipcMain.on('download-update', async (event) => {
         // 格式：https://github.com/yejinxing/student_app_source/releases/download/v1.0.2/StudentInfoTool-Setup-1.0.2.exe
         await autoUpdater.downloadUpdate();
         console.log('下载更新成功');
+        console.log('安装包已保存到:', downloadDir);
     } catch (error) {
         console.error('下载更新失败:', error);
         const errorMessage = error.message || '未知错误';
