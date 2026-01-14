@@ -2688,14 +2688,29 @@
         ipcRenderer.on('update-progress', (event, progress) => {
             document.getElementById('update-progress-fill').style.width = progress.percent + '%';
             document.getElementById('update-progress-percent').textContent = progress.percent.toFixed(1) + '%';
-            document.getElementById('update-progress-speed').textContent = progress.speed || '-- KB/s';
+            
+            // 显示实时速度（优先使用格式化后的速度，否则自行格式化）
+            let speedDisplay = progress.speed || '-- KB/s';
+            if (speedDisplay === '计算中...' && progress.bytesPerSecond > 0) {
+                if (progress.bytesPerSecond >= 1024 * 1024) {
+                    speedDisplay = `${(progress.bytesPerSecond / (1024 * 1024)).toFixed(2)} MB/s`;
+                } else {
+                    speedDisplay = `${(progress.bytesPerSecond / 1024).toFixed(1)} KB/s`;
+                }
+            }
+            document.getElementById('update-progress-speed').textContent = speedDisplay;
             
             // 显示更多下载信息
             const detailEl = document.getElementById('update-progress-detail');
             if (detailEl) {
                 const downloaded = progress.downloaded || `${(progress.transferred / (1024 * 1024)).toFixed(2)} MB`;
                 const total = progress.totalSize || progress.total || '未知';
-                detailEl.textContent = `${downloaded} / ${total}`;
+                const remaining = progress.remaining || '';
+                if (remaining && remaining !== '计算中...') {
+                    detailEl.textContent = `${downloaded} / ${total} · 剩余 ${remaining}`;
+                } else {
+                    detailEl.textContent = `${downloaded} / ${total}`;
+                }
             }
             
             // 显示镜像加速信息
@@ -2732,6 +2747,97 @@
             document.getElementById('update-error-msg').textContent = error || '检查更新失败，请稍后重试';
             showUpdateState('error');
         });
+        
+        // 更新完成通知（应用重启后显示）
+        ipcRenderer.on('update-completed-notification', (event, info) => {
+            console.log('收到更新完成通知:', info);
+            
+            // 显示更新成功提示
+            showUpdateSuccessToast(info.version);
+        });
+        
+        // 显示更新成功提示
+        function showUpdateSuccessToast(version) {
+            // 创建 toast 容器（如果不存在）
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 10000;
+                `;
+                document.body.appendChild(toastContainer);
+            }
+            
+            // 创建 toast 元素
+            const toast = document.createElement('div');
+            toast.className = 'update-success-toast';
+            toast.innerHTML = `
+                <div style="
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    color: white;
+                    padding: 16px 24px;
+                    border-radius: 12px;
+                    box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    animation: slideIn 0.5s ease-out;
+                    max-width: 350px;
+                ">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <div>
+                        <div style="font-weight: 600; font-size: 14px;">更新成功！</div>
+                        <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">已更新到版本 v${version}</div>
+                    </div>
+                </div>
+            `;
+            
+            // 添加动画样式
+            if (!document.getElementById('toast-styles')) {
+                const style = document.createElement('style');
+                style.id = 'toast-styles';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from {
+                            transform: translateX(100%);
+                            opacity: 0;
+                        }
+                        to {
+                            transform: translateX(0);
+                            opacity: 1;
+                        }
+                    }
+                    @keyframes slideOut {
+                        from {
+                            transform: translateX(0);
+                            opacity: 1;
+                        }
+                        to {
+                            transform: translateX(100%);
+                            opacity: 0;
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            toastContainer.appendChild(toast);
+            
+            // 5秒后自动消失
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease-in forwards';
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 5000);
+        }
         
         // 关于弹窗
         function openAboutModal() {
