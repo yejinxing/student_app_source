@@ -1,5 +1,5 @@
 const xlsx = require('xlsx');
-const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, TextRun, BorderStyle, PageBreak, VerticalAlign, HeadingLevel, TableOfContents, Footer, PageNumber, NumberFormat } = require('docx');
+const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, TextRun, BorderStyle, PageBreak, VerticalAlign, HeadingLevel, TableOfContents, Footer, PageNumber, NumberFormat, TableLayoutType } = require('docx');
 const fs = require('fs-extra');
 
 // 将厘米转换为 twip（Word 文档单位，1cm = 567 twip）
@@ -129,9 +129,18 @@ function createHeaderCell(text, options = {}) {
 }
 
 // 创建数据单元格
+// options.fillZero: 为true时，空值显示为0（用于统计表格）
 function createDataCell(text, options = {}) {
+    let displayText;
+    if (options.fillZero) {
+        // 统计表格：空值显示为0
+        displayText = (text === null || text === undefined || text === '') ? '0' : String(text);
+    } else {
+        // 其他表格：空值显示为空字符串，但数字0正常显示
+        displayText = (text === null || text === undefined) ? '' : String(text);
+    }
     return new TableCell({
-        children: [createCenteredParagraph(String(text || ''), { size: 20, font: "宋体" })],
+        children: [createCenteredParagraph(displayText, { size: 20, font: "宋体" })],
         width: options.width,
         columnSpan: options.columnSpan,
         rowSpan: options.rowSpan,
@@ -148,16 +157,38 @@ function createDataCell(text, options = {}) {
 // 数据行行高（1.22cm）
 const DATA_ROW_HEIGHT = cmToTwip(1.22);
 
+// 统计表格列宽常量
+const SUMMARY_COL_WIDTHS = {
+    DEPT: cmToTwip(2.19),           // 总统计表系部列宽 2.19cm
+    DEPT_LEVEL: cmToTwip(3.61),     // 分层统计表（子表格）系部列宽 3.61cm
+    CLASS_COUNT: cmToTwip(1.32),    // 班级数列宽 1.32cm
+    TOTAL: cmToTwip(1.32),          // 总计列宽 1.32cm
+    SUB_COL: cmToTwip(1.2),         // 子列宽度 1.2cm（层次、性别、政治面貌、民族的子列）
+};
+
+// 统计表格表头行高常量
+const SUMMARY_HEADER_HEIGHTS = {
+    ROW1: cmToTwip(0.8),   // 第一行表头行高 0.8cm
+    ROW2: cmToTwip(1.2),   // 第二行表头行高 1.2cm
+};
+
+// 清理文本中的空格和换行符（用于统计表格子列内容）
+function cleanSubColText(text) {
+    if (!text) return '';
+    return String(text).replace(/[\s\n\r]/g, '');
+}
+
 // 创建第一页总统计表
 function createSummaryTable(statistics, year) {
     const rows = [];
     
-    // 表头第一行
+    // 表头第一行（行高0.8cm）
     rows.push(new TableRow({
+        height: { value: SUMMARY_HEADER_HEIGHTS.ROW1, rule: "exact" },
         children: [
-            createHeaderCell('系  部', { rowSpan: 2 }),
-            createHeaderCell('班级数', { rowSpan: 2 }),
-            createHeaderCell('总计', { rowSpan: 2 }),
+            createHeaderCell('系  部', { rowSpan: 2, width: { size: SUMMARY_COL_WIDTHS.DEPT, type: WidthType.DXA } }),
+            createHeaderCell('班级数', { rowSpan: 2, width: { size: SUMMARY_COL_WIDTHS.CLASS_COUNT, type: WidthType.DXA } }),
+            createHeaderCell('总计', { rowSpan: 2, width: { size: SUMMARY_COL_WIDTHS.TOTAL, type: WidthType.DXA } }),
             createHeaderCell('层次', { columnSpan: 3 }),
             createHeaderCell('性别', { columnSpan: 2 }),
             createHeaderCell('政治面貌', { columnSpan: 4 }),
@@ -165,20 +196,21 @@ function createSummaryTable(statistics, year) {
         ]
     }));
     
-    // 表头第二行
+    // 表头第二行（行高1.2cm）- 子列内容不允许空格和换行
     rows.push(new TableRow({
+        height: { value: SUMMARY_HEADER_HEIGHTS.ROW2, rule: "exact" },
         children: [
-            createHeaderCell('本科'),
-            createHeaderCell('专科'),
-            createHeaderCell('专升本'),
-            createHeaderCell('男'),
-            createHeaderCell('女'),
-            createHeaderCell('群众'),
-            createHeaderCell('共青\n团员'),
-            createHeaderCell('中共\n预备党员'),
-            createHeaderCell('中共\n党员'),
-            createHeaderCell('汉族'),
-            createHeaderCell('少数\n民族'),
+            createHeaderCell(cleanSubColText('本科'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('专科'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('专升本'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('男'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('女'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('群众'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('共青团员'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('中共预备党员'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('中共党员'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('汉族'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('少数民族'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
         ]
     }));
     
@@ -190,20 +222,20 @@ function createSummaryTable(statistics, year) {
         rows.push(new TableRow({
             height: { value: DATA_ROW_HEIGHT, rule: "exact" },
             children: [
-                createDataCell(dept),
-                createDataCell(deptStats.classCount),
-                createDataCell(deptStats.total),
-                createDataCell(deptStats.levels['本科'] || 0),
-                createDataCell(deptStats.levels['专科'] || 0),
-                createDataCell(deptStats.levels['专升本'] || 0),
-                createDataCell(deptStats.gender['男'] || 0),
-                createDataCell(deptStats.gender['女'] || 0),
-                createDataCell(deptStats.politics['群众'] || 0),
-                createDataCell(deptStats.politics['共青团员'] || 0),
-                createDataCell(deptStats.politics['中共预备党员'] || 0),
-                createDataCell(deptStats.politics['中共党员'] || 0),
-                createDataCell(deptStats.ethnicity['汉族'] || 0),
-                createDataCell(deptStats.ethnicity['少数民族'] || 0),
+                createDataCell(dept, { width: { size: SUMMARY_COL_WIDTHS.DEPT, type: WidthType.DXA } }),
+                createDataCell(deptStats.classCount, { width: { size: SUMMARY_COL_WIDTHS.CLASS_COUNT, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.total, { width: { size: SUMMARY_COL_WIDTHS.TOTAL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.levels['本科'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.levels['专科'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.levels['专升本'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.gender['男'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.gender['女'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.politics['群众'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.politics['共青团员'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.politics['中共预备党员'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.politics['中共党员'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.ethnicity['汉族'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.ethnicity['少数民族'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
             ]
         }));
     }
@@ -212,27 +244,46 @@ function createSummaryTable(statistics, year) {
     rows.push(new TableRow({
         height: { value: DATA_ROW_HEIGHT, rule: "exact" },
         children: [
-            createHeaderCell('总计'),
-            createDataCell(statistics.totalClassCount),
-            createDataCell(statistics.totalStudents),
-            createDataCell(statistics.totalLevels['本科'] || 0),
-            createDataCell(statistics.totalLevels['专科'] || 0),
-            createDataCell(statistics.totalLevels['专升本'] || 0),
-            createDataCell(statistics.totalGender['男'] || 0),
-            createDataCell(statistics.totalGender['女'] || 0),
-            createDataCell(statistics.totalPolitics['群众'] || 0),
-            createDataCell(statistics.totalPolitics['共青团员'] || 0),
-            createDataCell(statistics.totalPolitics['中共预备党员'] || 0),
-            createDataCell(statistics.totalPolitics['中共党员'] || 0),
-            createDataCell(statistics.totalEthnicity['汉族'] || 0),
-            createDataCell(statistics.totalEthnicity['少数民族'] || 0),
+            createHeaderCell('总计', { width: { size: SUMMARY_COL_WIDTHS.DEPT, type: WidthType.DXA } }),
+            createDataCell(statistics.totalClassCount, { width: { size: SUMMARY_COL_WIDTHS.CLASS_COUNT, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalStudents, { width: { size: SUMMARY_COL_WIDTHS.TOTAL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalLevels['本科'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalLevels['专科'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalLevels['专升本'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalGender['男'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalGender['女'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalPolitics['群众'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalPolitics['共青团员'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalPolitics['中共预备党员'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalPolitics['中共党员'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalEthnicity['汉族'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(statistics.totalEthnicity['少数民族'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
         ]
     }));
     
+    // 总统计表列宽数组：系部 + 班级数 + 总计 + 层次(3) + 性别(2) + 政治面貌(4) + 民族(2) = 14列
+    const summaryColumnWidths = [
+        SUMMARY_COL_WIDTHS.DEPT,        // 系部
+        SUMMARY_COL_WIDTHS.CLASS_COUNT, // 班级数
+        SUMMARY_COL_WIDTHS.TOTAL,       // 总计
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 本科
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 专科
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 专升本
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 男
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 女
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 群众
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 共青团员
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 中共预备党员
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 中共党员
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 汉族
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 少数民族
+    ];
+    
     return new Table({
         rows: rows,
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        layout: 'autofit', // 列宽自适应
+        layout: TableLayoutType.FIXED,
+        columnWidths: summaryColumnWidths,
+        alignment: AlignmentType.CENTER, // 表格居中
     });
 }
 
@@ -240,27 +291,29 @@ function createSummaryTable(statistics, year) {
 function createLevelSummaryTable(statistics, level, year) {
     const rows = [];
     
-    // 表头第一行
+    // 表头第一行（行高0.8cm）
     rows.push(new TableRow({
+        height: { value: SUMMARY_HEADER_HEIGHTS.ROW1, rule: "exact" },
         children: [
-            createHeaderCell('系部', { rowSpan: 2 }),
-            createHeaderCell('班级数', { rowSpan: 2 }),
+            createHeaderCell('系  部', { rowSpan: 2, width: { size: SUMMARY_COL_WIDTHS.DEPT_LEVEL, type: WidthType.DXA } }),
+            createHeaderCell('班级数', { rowSpan: 2, width: { size: SUMMARY_COL_WIDTHS.CLASS_COUNT, type: WidthType.DXA } }),
             createHeaderCell('性别', { columnSpan: 2 }),
-            createHeaderCell('总计', { rowSpan: 2 }),
+            createHeaderCell('总计', { rowSpan: 2, width: { size: SUMMARY_COL_WIDTHS.TOTAL, type: WidthType.DXA } }),
             createHeaderCell('政治面貌', { columnSpan: 2 }),
             createHeaderCell('民族', { columnSpan: 2 }),
         ]
     }));
     
-    // 表头第二行
+    // 表头第二行（行高1.2cm）- 子列内容不允许空格和换行
     rows.push(new TableRow({
+        height: { value: SUMMARY_HEADER_HEIGHTS.ROW2, rule: "exact" },
         children: [
-            createHeaderCell('男'),
-            createHeaderCell('女'),
-            createHeaderCell('共青\n团员'),
-            createHeaderCell('群众'),
-            createHeaderCell('汉族'),
-            createHeaderCell('少数\n民族'),
+            createHeaderCell(cleanSubColText('男'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('女'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('共青团员'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('群众'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('汉族'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
+            createHeaderCell(cleanSubColText('少数民族'), { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA } }),
         ]
     }));
     
@@ -273,15 +326,15 @@ function createLevelSummaryTable(statistics, level, year) {
         rows.push(new TableRow({
             height: { value: DATA_ROW_HEIGHT, rule: "exact" },
             children: [
-                createDataCell(dept),
-                createDataCell(deptStats.classCount),
-                createDataCell(deptStats.gender['男'] || 0),
-                createDataCell(deptStats.gender['女'] || 0),
-                createDataCell(deptStats.total),
-                createDataCell(deptStats.politics['共青团员'] || 0),
-                createDataCell(deptStats.politics['群众'] || 0),
-                createDataCell(deptStats.ethnicity['汉族'] || 0),
-                createDataCell(deptStats.ethnicity['少数民族'] || 0),
+                createDataCell(dept, { width: { size: SUMMARY_COL_WIDTHS.DEPT_LEVEL, type: WidthType.DXA } }),
+                createDataCell(deptStats.classCount, { width: { size: SUMMARY_COL_WIDTHS.CLASS_COUNT, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.gender['男'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.gender['女'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.total, { width: { size: SUMMARY_COL_WIDTHS.TOTAL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.politics['共青团员'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.politics['群众'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.ethnicity['汉族'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+                createDataCell(deptStats.ethnicity['少数民族'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
             ]
         }));
     }
@@ -291,22 +344,36 @@ function createLevelSummaryTable(statistics, level, year) {
     rows.push(new TableRow({
         height: { value: DATA_ROW_HEIGHT, rule: "exact" },
         children: [
-            createHeaderCell('总计'),
-            createDataCell(levelTotal.classCount || 0),
-            createDataCell(levelTotal.gender?.['男'] || 0),
-            createDataCell(levelTotal.gender?.['女'] || 0),
-            createDataCell(levelTotal.studentCount || 0),
-            createDataCell(levelTotal.politics?.['共青团员'] || 0),
-            createDataCell(levelTotal.politics?.['群众'] || 0),
-            createDataCell(levelTotal.ethnicity?.['汉族'] || 0),
-            createDataCell(levelTotal.ethnicity?.['少数民族'] || 0),
+            createHeaderCell('总计', { width: { size: SUMMARY_COL_WIDTHS.DEPT_LEVEL, type: WidthType.DXA } }),
+            createDataCell(levelTotal.classCount, { width: { size: SUMMARY_COL_WIDTHS.CLASS_COUNT, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(levelTotal.gender?.['男'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(levelTotal.gender?.['女'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(levelTotal.studentCount, { width: { size: SUMMARY_COL_WIDTHS.TOTAL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(levelTotal.politics?.['共青团员'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(levelTotal.politics?.['群众'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(levelTotal.ethnicity?.['汉族'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
+            createDataCell(levelTotal.ethnicity?.['少数民族'], { width: { size: SUMMARY_COL_WIDTHS.SUB_COL, type: WidthType.DXA }, fillZero: true }),
         ]
     }));
     
+    // 分层统计表列宽数组：系部 + 班级数 + 性别(2) + 总计 + 政治面貌(2) + 民族(2) = 9列
+    const levelColumnWidths = [
+        SUMMARY_COL_WIDTHS.DEPT_LEVEL,  // 系部 3.61cm
+        SUMMARY_COL_WIDTHS.CLASS_COUNT, // 班级数
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 男
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 女
+        SUMMARY_COL_WIDTHS.TOTAL,       // 总计
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 共青团员
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 群众
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 汉族
+        SUMMARY_COL_WIDTHS.SUB_COL,     // 少数民族
+    ];
+    
     return new Table({
         rows: rows,
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        layout: 'autofit', // 列宽自适应
+        layout: TableLayoutType.FIXED,
+        columnWidths: levelColumnWidths,
+        alignment: AlignmentType.CENTER, // 表格居中
     });
 }
 
