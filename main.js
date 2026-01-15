@@ -71,8 +71,16 @@ app.whenReady().then(async () => {
     // 立即创建窗口（不阻塞）
     createWindow();
     
-    // 检测是否刚完成更新，显示通知
-    checkUpdateCompleted();
+    // 等待窗口完全加载后再检测更新完成（确保前端已准备好接收消息）
+    if (mainWindow) {
+        mainWindow.webContents.on('did-finish-load', () => {
+            console.log('窗口加载完成，开始检测更新状态...');
+            // 延迟一点确保前端 JS 完全初始化
+            setTimeout(() => {
+                checkUpdateCompleted();
+            }, 500);
+        });
+    }
     
     // 延迟 3 秒后执行清理（给安装程序时间完全退出）
     setTimeout(async () => {
@@ -90,52 +98,71 @@ app.whenReady().then(async () => {
 
 // 检测更新是否刚完成，显示通知
 function checkUpdateCompleted() {
-    const updateMarkerPath = path.join(app.getPath('userData'), 'update-completed.json');
+    const userDataDir = app.getPath('userData');
+    const lastVersionPath = path.join(userDataDir, 'last-version.txt');
+    const currentVersion = app.getVersion();
     
+    console.log('========== 更新检测 ==========');
+    console.log('userData 目录:', userDataDir);
+    console.log('版本文件路径:', lastVersionPath);
+    console.log('当前应用版本:', currentVersion);
+    
+    let lastVersion = null;
+    
+    // 读取上次保存的版本号
     try {
-        if (fs.existsSync(updateMarkerPath)) {
-            const markerContent = fs.readFileSync(updateMarkerPath, 'utf8');
-            let updateInfo = {};
-            
-            try {
-                updateInfo = JSON.parse(markerContent);
-            } catch (e) {
-                // 解析失败，可能是批处理生成的简单格式
-                console.log('更新标记内容:', markerContent);
-            }
-            
-            console.log('检测到更新完成标记:', updateInfo);
-            
-            // 删除标记文件
-            fs.unlinkSync(updateMarkerPath);
-            console.log('已删除更新标记文件');
-            
-            // 等待窗口完全加载后显示通知
-            setTimeout(() => {
-                if (mainWindow) {
-                    const currentVersion = app.getVersion();
-                    mainWindow.webContents.send('update-completed-notification', {
-                        version: currentVersion,
-                        previousVersion: updateInfo.version,
-                        timestamp: updateInfo.timestamp
-                    });
-                    
-                    // 同时显示系统通知
-                    const { Notification } = require('electron');
-                    if (Notification.isSupported()) {
-                        const notification = new Notification({
-                            title: '更新完成',
-                            body: `应用已成功更新到版本 ${currentVersion}`,
-                            icon: path.join(__dirname, 'assets', 'icon.png')
-                        });
-                        notification.show();
-                    }
-                }
-            }, 1500);
+        if (fs.existsSync(lastVersionPath)) {
+            lastVersion = fs.readFileSync(lastVersionPath, 'utf8').trim();
+            console.log('上次保存的版本:', lastVersion);
+        } else {
+            console.log('版本文件不存在，这是首次运行');
         }
     } catch (e) {
-        console.error('检测更新标记失败:', e.message);
+        console.error('读取版本文件失败:', e.message);
     }
+    
+    // 比较版本号
+    const needShowNotification = lastVersion && lastVersion !== currentVersion;
+    console.log('是否需要显示更新通知:', needShowNotification);
+    
+    if (needShowNotification) {
+        console.log('检测到版本变化:', lastVersion, '->', currentVersion);
+        
+        // 显示更新完成通知
+        if (mainWindow && mainWindow.webContents) {
+            mainWindow.webContents.send('update-completed-notification', {
+                version: currentVersion,
+                previousVersion: lastVersion
+            });
+            console.log('已发送通知到前端');
+        }
+        
+        // 显示系统通知
+        try {
+            const { Notification } = require('electron');
+            if (Notification.isSupported()) {
+                const notification = new Notification({
+                    title: '更新完成',
+                    body: `应用已从 v${lastVersion} 更新到 v${currentVersion}`,
+                    icon: path.join(__dirname, 'assets', 'icon.png')
+                });
+                notification.show();
+                console.log('已显示系统通知');
+            }
+        } catch (e) {
+            console.error('显示系统通知失败:', e.message);
+        }
+    }
+    
+    // 保存当前版本号（无论是否显示通知都要保存）
+    try {
+        fs.writeFileSync(lastVersionPath, currentVersion, 'utf8');
+        console.log('已保存当前版本号到文件:', currentVersion);
+    } catch (e) {
+        console.error('保存版本号失败:', e.message);
+    }
+    
+    console.log('========== 检测完成 ==========');
 }
 
 ipcMain.on('select-file', async (event) => {
@@ -177,16 +204,52 @@ const GITEE_OWNER = 'yejinxing';
 const GITEE_REPO = 'student_app_source';
 
 // GitHub 镜像加速列表（按优先级排序）
+// 注意：某些镜像可能会有 SSL 证书问题或不稳定，需要定期检查更新
+// 前缀方式：在原始 URL 前添加镜像前缀
+// 替换方式：将 github.com 替换为镜像域名
 const GITHUB_MIRRORS = [
-    { name: 'ghproxy', prefix: 'https://mirror.ghproxy.com/' },
-    { name: 'ghproxy.net', prefix: 'https://ghproxy.net/' },
-    { name: 'gh-proxy', prefix: 'https://gh-proxy.com/' },
-    { name: '直连', prefix: '' }
+    { name: 'ghproxy.net', prefix: 'https://ghproxy.net/', type: 'prefix' },
+    { name: 'gh-proxy', prefix: 'https://gh-proxy.com/', type: 'prefix' },
+    { name: 'ghfast', prefix: 'https://ghfast.top/', type: 'prefix' },
+    { name: 'kkgithub', prefix: 'https://kkgithub.com/', type: 'replace' },  // 替换 github.com
+    { name: '直连', prefix: '', type: 'direct' }
 ];
+
+// 从镜像 URL 中提取原始 URL
+function extractOriginalUrl(url) {
+    if (!url) return url;
+    
+    // 检查是否是镜像 URL
+    for (const mirror of GITHUB_MIRRORS) {
+        if (!mirror.prefix) continue;
+        
+        if (mirror.type === 'replace') {
+            // 替换方式：将镜像域名替换回 github.com
+            const mirrorDomain = mirror.prefix.replace(/\/$/, '');
+            if (url.includes(mirrorDomain)) {
+                return url.replace(mirrorDomain, 'https://github.com');
+            }
+        } else if (mirror.type === 'prefix' && url.startsWith(mirror.prefix)) {
+            // 前缀方式：移除镜像前缀
+            return url.substring(mirror.prefix.length);
+        }
+    }
+    
+    // 不是镜像 URL，返回原样
+    return url;
+}
 
 // 将 GitHub URL 转换为镜像 URL
 function transformToMirrorUrl(url, mirrorIndex = 0) {
-    if (!url || !url.includes('github.com')) {
+    if (!url) {
+        return url;
+    }
+    
+    // 先提取原始 URL（如果已经是镜像 URL，先还原）
+    const originalUrl = extractOriginalUrl(url);
+    
+    // 检查是否是 GitHub URL
+    if (!originalUrl.includes('github.com')) {
         return url;  // 不是 GitHub URL，不转换
     }
     
@@ -195,7 +258,18 @@ function transformToMirrorUrl(url, mirrorIndex = 0) {
     }
     
     const mirror = GITHUB_MIRRORS[mirrorIndex];
-    return mirror.prefix ? mirror.prefix + url : url;
+    
+    // 根据镜像类型进行转换
+    if (mirror.type === 'replace') {
+        // 替换方式：将 github.com 替换为镜像域名
+        return originalUrl.replace('https://github.com', mirror.prefix.replace(/\/$/, ''));
+    } else if (mirror.type === 'prefix' && mirror.prefix) {
+        // 前缀方式：在原始 URL 前添加镜像前缀
+        return mirror.prefix + originalUrl;
+    } else {
+        // 直连或其他
+        return originalUrl;
+    }
 }
 
 // 通过镜像下载文件（支持进度回调和断点续传）
@@ -933,12 +1007,30 @@ autoUpdater.on('update-available', (info) => {
     currentUpdateInfo = info; // 保存更新信息用于自定义下载
     
     // 修改下载 URL 为 GitHub 镜像（如果 URL 指向 GitHub）
+    // 在 update-available 事件中立即转换，确保后续下载使用镜像
     if (info.files && info.files.length > 0) {
-        info.files.forEach(file => {
+        console.log('=== update-available 事件中转换 GitHub URL 为镜像 ===');
+        // 确保镜像状态已初始化
+        if (!currentMirrorState.originalUrls || Object.keys(currentMirrorState.originalUrls).length === 0) {
+            currentMirrorState.mirrorIndex = 0;
+            currentMirrorState.originalUrls = {};
+        }
+        
+        info.files.forEach((file, index) => {
             if (file.url && file.url.includes('github.com')) {
-                // 保存原始 URL，下载时会使用镜像
-                file.originalUrl = file.url;
-                console.log('检测到 GitHub URL，将在下载时使用镜像:', file.url);
+                // 先提取原始 URL（如果已经是镜像 URL，先还原）
+                const originalUrl = extractOriginalUrl(file.url);
+                // 保存原始 URL（如果还没有保存）
+                if (!currentMirrorState.originalUrls[index]) {
+                    currentMirrorState.originalUrls[index] = originalUrl;
+                }
+                // 立即转换为镜像 URL（使用已保存的原始 URL）
+                const originalUrlToUse = currentMirrorState.originalUrls[index] || originalUrl;
+                const mirrorUrl = transformToMirrorUrl(originalUrlToUse, currentMirrorState.mirrorIndex);
+                file.url = mirrorUrl;
+                console.log(`文件 ${index + 1}:`);
+                console.log(`  原始 URL: ${originalUrlToUse}`);
+                console.log(`  镜像 URL: ${mirrorUrl} (镜像: ${GITHUB_MIRRORS[currentMirrorState.mirrorIndex].name})`);
             }
         });
     }
@@ -972,15 +1064,30 @@ autoUpdater.on('update-not-available', (info) => {
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
+    // 有下载进度更新，说明下载正在进行，清除待处理的错误
+    if (updateErrorPending) {
+        console.log('检测到下载进度更新，清除待处理的错误');
+        updateErrorPending = null;
+    }
+    
     const speed = formatSize(progressObj.bytesPerSecond) + '/s';
     const percent = Math.round(progressObj.percent * 10) / 10;
     const transferred = formatSize(progressObj.transferred);
     const total = formatSize(progressObj.total);
     
-    console.log(`下载进度: ${percent}% - ${transferred}/${total} - ${speed}`);
+    // 获取当前使用的镜像名称
+    let mirrorName = null;
+    if (currentMirrorState && currentMirrorState.mirrorIndex !== undefined) {
+        const currentMirror = GITHUB_MIRRORS[currentMirrorState.mirrorIndex];
+        if (currentMirror) {
+            mirrorName = currentMirror.name;
+        }
+    }
+    
+    console.log(`下载进度: ${percent}% - ${transferred}/${total} - ${speed}${mirrorName ? ` [镜像: ${mirrorName}]` : ''}`);
     
     if (mainWindow) {
-        mainWindow.webContents.send('update-progress', {
+        const progressData = {
             percent: percent,
             downloaded: transferred,
             total: total,
@@ -988,7 +1095,14 @@ autoUpdater.on('download-progress', (progressObj) => {
             remaining: progressObj.bytesPerSecond > 0 
                 ? Math.round((progressObj.total - progressObj.transferred) / progressObj.bytesPerSecond) + '秒'
                 : '计算中...'
-        });
+        };
+        
+        // 如果有镜像信息，添加到进度数据中
+        if (mirrorName) {
+            progressData.mirrorName = mirrorName;
+        }
+        
+        mainWindow.webContents.send('update-progress', progressData);
     }
 });
 
@@ -1042,12 +1156,237 @@ autoUpdater.on('update-downloaded', (info) => {
     }
 });
 
-autoUpdater.on('error', (err) => {
+autoUpdater.on('error', async (err) => {
     console.error('更新出错:', err);
-    if (mainWindow) {
-        mainWindow.webContents.send('update-error', err.message || '更新失败，请稍后重试');
+    // 提取错误消息（可能是字符串、Error对象或其他格式）
+    let errorMessage = '';
+    if (typeof err === 'string') {
+        errorMessage = err;
+    } else if (err && err.message) {
+        errorMessage = err.message;
+    } else if (err && err.toString) {
+        errorMessage = err.toString();
+    } else {
+        errorMessage = JSON.stringify(err) || '更新失败，请稍后重试';
     }
+    
+    console.log('错误消息:', errorMessage);
+    
+    const errorMessageUpper = errorMessage.toUpperCase();
+    
+    // 检查是否是 blockmap/差量下载相关的错误
+    // electron-updater 在差量下载失败时会自动回退到完整下载，这是正常行为，不应该显示错误
+    // 常见情况：1. 找不到旧版本文件(ENOENT) 2. blockmap下载失败 3. 差量下载失败
+    const isBlockmapError = errorMessageUpper.includes('DIFFERENTIALLY') || 
+                           errorMessageUpper.includes('BLOCKMAP') ||
+                           errorMessageUpper.includes('FALLBACK TO FULL') ||
+                           errorMessageUpper.includes('FALLBACK') ||
+                           errorMessageUpper.includes('CANNOT DOWNLOAD DIFFERENTIALLY') ||
+                           (errorMessageUpper.includes('ENOENT') && errorMessageUpper.includes('INSTALLER'));
+    
+    if (isBlockmapError) {
+        console.log('检测到差量下载失败，electron-updater 会自动回退到完整下载，忽略此错误');
+        return;  // 直接返回，不显示错误页面
+    }
+    
+    // 设置延迟处理：等待几秒观察是否有下载进度
+    // 如果有进度更新，说明 electron-updater 已自动重试或回退，不需要显示错误
+    const pendingError = errorMessage;
+    console.log('错误发生，等待5秒观察是否有下载进度...');
+    updateErrorPending = pendingError;
+    
+    setTimeout(async () => {
+        // 如果5秒后 updateErrorPending 还是当前错误，说明没有新的进度更新
+        if (updateErrorPending !== pendingError) {
+            console.log('检测到新的下载进度或错误已被处理，忽略此错误');
+            return;
+        }
+        
+        console.log('5秒内没有新的下载进度，开始处理错误');
+        updateErrorPending = null;
+        
+        // 继续执行错误处理逻辑
+        await handleDownloadError(errorMessage);
+    }, 5000);
 });
+
+// 处理下载错误的函数
+async function handleDownloadError(errorMessage) {
+    const errorMessageUpper = errorMessage.toUpperCase();
+    
+    // 检查是否是连接/网络错误（可能是镜像服务器问题，需要切换镜像）
+    const isConnectionError = errorMessageUpper.includes('ERR_CONNECTION_RESET') || 
+                             errorMessageUpper.includes('ERR_CONNECTION_TIMED_OUT') ||
+                             errorMessageUpper.includes('ERR_TIMED_OUT') ||
+                             errorMessageUpper.includes('ERR_CERT_AUTHORITY_INVALID') ||  // SSL 证书无效
+                             errorMessageUpper.includes('ERR_CERT_DATE_INVALID') ||  // SSL 证书过期
+                             errorMessageUpper.includes('ERR_SSL_PROTOCOL_ERROR') ||  // SSL 协议错误
+                             errorMessageUpper.includes('ECONNRESET') ||
+                             errorMessageUpper.includes('ETIMEDOUT') ||
+                             errorMessageUpper.includes('ENOTFOUND') ||
+                             errorMessageUpper.includes('TIMEOUT') ||
+                             errorMessageUpper.includes('TIMED_OUT') ||
+                             errorMessageUpper.includes('CONNECTION_TIMED_OUT') ||
+                             errorMessageUpper.includes('NET::ERR_CONNECTION_TIMED_OUT') ||
+                             errorMessageUpper.includes('NET::ERR_TIMED_OUT') ||
+                             errorMessageUpper.includes('403') ||  // 服务器拒绝
+                             errorMessageUpper.includes('502') ||  // 网关错误
+                             errorMessageUpper.includes('503') ||  // 服务不可用
+                             errorMessageUpper.includes('504');    // 网关超时
+    
+    // 如果是连接错误且当前使用的是镜像，先尝试重试，失败后再切换镜像
+    if (isConnectionError && currentUpdateInfo && currentUpdateInfo.files) {
+        const currentMirror = GITHUB_MIRRORS[currentMirrorState.mirrorIndex];
+        console.log(`镜像 ${currentMirror.name} 下载失败，错误: ${errorMessage}`);
+        
+        // 检查是否有部分下载的文件（用于断点续传）
+        let partialDownloadInfo = null;
+        try {
+            const cacheDir = autoUpdater.cacheDir || path.join(app.getPath('userData'), app.getName() + '-updater', 'pending');
+            if (fs.existsSync(cacheDir)) {
+                const files = fs.readdirSync(cacheDir);
+                const exeFiles = files.filter(f => f.endsWith('.exe') || f.endsWith('.dmg') || f.endsWith('.AppImage'));
+                if (exeFiles.length > 0) {
+                    const partialFile = path.join(cacheDir, exeFiles[0]);
+                    const stat = fs.statSync(partialFile);
+                    if (stat.size > 0) {
+                        partialDownloadInfo = {
+                            path: partialFile,
+                            size: stat.size
+                        };
+                        console.log(`发现部分下载的文件: ${partialFile} (${(stat.size / (1024 * 1024)).toFixed(2)} MB)`);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('检查部分下载文件失败:', e.message);
+        }
+        
+        // 先尝试在同一镜像上重试（可能是临时网络问题）
+        if (currentMirrorState.retryCount < currentMirrorState.maxRetriesPerMirror) {
+            currentMirrorState.retryCount++;
+            console.log(`在同一镜像 ${currentMirror.name} 上重试 (${currentMirrorState.retryCount}/${currentMirrorState.maxRetriesPerMirror})...`);
+            
+            // 通知前端正在重试
+            if (mainWindow) {
+                let retryMessage = `镜像 ${currentMirror.name} 连接失败，正在重试 (${currentMirrorState.retryCount}/${currentMirrorState.maxRetriesPerMirror})...`;
+                if (partialDownloadInfo) {
+                    const downloadedMB = (partialDownloadInfo.size / (1024 * 1024)).toFixed(2);
+                    retryMessage += ` (已下载 ${downloadedMB} MB，将尝试断点续传)`;
+                }
+                mainWindow.webContents.send('update-retrying', {
+                    mirror: currentMirror.name,
+                    message: retryMessage
+                });
+            }
+            
+            // 延迟后重试下载（electron-updater 应该会自动断点续传）
+            setTimeout(async () => {
+                try {
+                    console.log('在同一镜像上重试下载...');
+                    await autoUpdater.downloadUpdate();
+                } catch (retryError) {
+                    console.error('重试下载失败:', retryError);
+                    // 继续触发错误处理（可能会切换镜像）
+                    autoUpdater.emit('error', retryError);
+                }
+            }, 2000);
+            
+            return; // 不发送错误，等待重试结果
+        }
+        
+        // 同一镜像重试失败，尝试切换到下一个镜像
+        if (currentMirrorState.mirrorIndex < GITHUB_MIRRORS.length - 1) {
+            // 重置当前镜像的重试计数
+            currentMirrorState.retryCount = 0;
+            currentMirrorState.mirrorIndex++;
+            const nextMirror = GITHUB_MIRRORS[currentMirrorState.mirrorIndex];
+            console.log(`尝试切换到下一个镜像: ${nextMirror.name}`);
+            
+            // 如果有部分下载的文件，记录信息
+            if (partialDownloadInfo) {
+                console.log(`注意: 检测到部分下载文件 (${(partialDownloadInfo.size / (1024 * 1024)).toFixed(2)} MB)，electron-updater 应该会自动断点续传`);
+            }
+            
+            // 恢复原始 URL 并转换为新镜像 URL
+            if (autoUpdater.updateInfo && autoUpdater.updateInfo.files) {
+                autoUpdater.updateInfo.files.forEach((file, index) => {
+                    // 优先使用已保存的原始 URL，否则从当前 URL 提取
+                    let originalUrl = currentMirrorState.originalUrls[index];
+                    if (!originalUrl && file.url) {
+                        originalUrl = extractOriginalUrl(file.url);
+                        // 保存原始 URL（如果还没有保存）
+                        currentMirrorState.originalUrls[index] = originalUrl;
+                    }
+                    
+                    if (originalUrl && originalUrl.includes('github.com')) {
+                        const mirrorUrl = transformToMirrorUrl(originalUrl, currentMirrorState.mirrorIndex);
+                        file.url = mirrorUrl;
+                        console.log(`文件 ${index + 1} 切换到镜像 ${nextMirror.name}: ${mirrorUrl}`);
+                    }
+                });
+            }
+            
+            // 同步更新 currentUpdateInfo
+            currentUpdateInfo.files.forEach((file, index) => {
+                // 优先使用已保存的原始 URL，否则从当前 URL 提取
+                let originalUrl = currentMirrorState.originalUrls[index];
+                if (!originalUrl && file.url) {
+                    originalUrl = extractOriginalUrl(file.url);
+                    // 保存原始 URL（如果还没有保存）
+                    currentMirrorState.originalUrls[index] = originalUrl;
+                }
+                
+                if (originalUrl && originalUrl.includes('github.com')) {
+                    file.url = transformToMirrorUrl(originalUrl, currentMirrorState.mirrorIndex);
+                }
+            });
+            
+            // 通知前端正在重试
+            if (mainWindow) {
+                let retryMessage = `镜像 ${currentMirror.name} 连接失败，正在尝试 ${nextMirror.name}...`;
+                if (partialDownloadInfo) {
+                    const downloadedMB = (partialDownloadInfo.size / (1024 * 1024)).toFixed(2);
+                    retryMessage += ` (已下载 ${downloadedMB} MB，将尝试断点续传)`;
+                }
+                mainWindow.webContents.send('update-retrying', {
+                    mirror: nextMirror.name,
+                    message: retryMessage
+                });
+            }
+            
+            // 延迟后重试下载（给 electron-updater 时间检测部分文件）
+            setTimeout(async () => {
+                try {
+                    console.log('使用新镜像重新下载...');
+                    // electron-updater 应该会自动检测部分下载的文件并断点续传
+                    // 如果服务器支持 Range 请求，会从断点继续下载
+                    await autoUpdater.downloadUpdate();
+                } catch (retryError) {
+                    console.error('重试下载失败:', retryError);
+                    // 如果所有镜像都失败，发送最终错误
+                    if (currentMirrorState.mirrorIndex >= GITHUB_MIRRORS.length - 1) {
+                        if (mainWindow) {
+                            mainWindow.webContents.send('update-error', '所有镜像下载都失败，请稍后重试或手动下载');
+                        }
+                    } else {
+                        // 继续尝试下一个镜像（递归）
+                        autoUpdater.emit('error', retryError);
+                    }
+                }
+            }, 2000); // 增加延迟，给 electron-updater 更多时间检测部分文件
+            
+            return; // 不发送错误，等待重试结果
+        } else {
+            console.log('所有镜像都已尝试，下载失败');
+        }
+    }
+    
+    // 非连接错误或所有镜像都失败，发送错误
+    if (mainWindow) {
+        mainWindow.webContents.send('update-error', `下载失败: ${errorMessage}`);
+    }
+}
 
 // 手动下载并解析 latest.yml（现在所有平台都使用统一的 latest.yml）
 async function fetchUpdateInfo(version) {
@@ -1098,6 +1437,29 @@ ipcMain.on('check-for-updates', async (event) => {
         // 手动下载 latest.yml（因为 electron-updater 的 generic provider 会自动追加 /latest.yml）
         const yaml = require('js-yaml');
         const updateInfo = await fetchUpdateInfo(latestVersion);
+        
+        // 立即将 GitHub URL 转换为镜像 URL（在保存之前）
+        // 同时保存原始 URL 用于镜像切换
+        if (updateInfo.files && updateInfo.files.length > 0) {
+            console.log('=== 检查更新时转换 GitHub URL 为镜像 ===');
+            // 重置镜像状态
+            currentMirrorState.mirrorIndex = 0;
+            currentMirrorState.originalUrls = {};
+            
+            updateInfo.files.forEach((file, index) => {
+                if (file.url && file.url.includes('github.com')) {
+                    // 先提取原始 URL（如果已经是镜像 URL，先还原）
+                    const originalUrl = extractOriginalUrl(file.url);
+                    // 保存原始 URL（用于镜像切换）
+                    currentMirrorState.originalUrls[index] = originalUrl;
+                    const mirrorUrl = transformToMirrorUrl(originalUrl, 0);  // 使用第一个镜像
+                    file.url = mirrorUrl;
+                    console.log(`文件 ${index + 1}:`);
+                    console.log(`  原始 URL: ${originalUrl}`);
+                    console.log(`  镜像 URL: ${mirrorUrl} (镜像: ${GITHUB_MIRRORS[0].name})`);
+                }
+            });
+        }
         
         console.log('解析的更新信息:', JSON.stringify(updateInfo, null, 2));
         
@@ -1207,6 +1569,35 @@ ipcMain.on('check-for-updates', async (event) => {
             const checkResult = await autoUpdater.checkForUpdates();
             console.log('已更新 electron-updater 内部状态');
             console.log('检查结果:', checkResult ? `更新可用: ${checkResult.updateInfo?.version}` : '无更新');
+            
+            // checkForUpdates() 后，electron-updater 会重新获取 latest.yml
+            // 需要再次将 GitHub URL 转换为镜像 URL
+            if (autoUpdater.updateInfo && autoUpdater.updateInfo.files) {
+                console.log('=== checkForUpdates 后再次转换 GitHub URL 为镜像 ===');
+                autoUpdater.updateInfo.files.forEach((file, index) => {
+                    if (file.url && file.url.includes('github.com')) {
+                        // 优先使用已保存的原始 URL，否则从当前 URL 提取
+                        let originalUrl = currentMirrorState.originalUrls[index];
+                        if (!originalUrl && file.url) {
+                            originalUrl = extractOriginalUrl(file.url);
+                            // 保存原始 URL（如果还没有保存）
+                            currentMirrorState.originalUrls[index] = originalUrl;
+                        }
+                        
+                        if (originalUrl) {
+                            const mirrorUrl = transformToMirrorUrl(originalUrl, currentMirrorState.mirrorIndex);
+                            file.url = mirrorUrl;
+                            console.log(`文件 ${index + 1}:`);
+                            console.log(`  原始 URL: ${originalUrl}`);
+                            console.log(`  镜像 URL: ${mirrorUrl} (镜像: ${GITHUB_MIRRORS[currentMirrorState.mirrorIndex].name})`);
+                        }
+                    }
+                });
+                // 同步更新 currentUpdateInfo
+                if (currentUpdateInfo && currentUpdateInfo.files) {
+                    currentUpdateInfo.files = autoUpdater.updateInfo.files;
+                }
+            }
         } catch (checkError) {
             console.error('checkForUpdates() 调用失败:', checkError);
             // 如果 checkForUpdates 失败，我们需要确保 electron-updater 知道有更新可用
@@ -1237,6 +1628,50 @@ ipcMain.on('check-for-updates', async (event) => {
     }
 });
 
+// IPC: 静默检查更新（应用启动时自动调用，不显示弹窗）
+ipcMain.on('check-for-updates-silent', async (event) => {
+    console.log('[静默检查] 开始检查更新...');
+    try {
+        // 从 Gitee 获取最新版本信息
+        const latestRelease = await getLatestVersionFromGitee();
+        
+        if (!latestRelease || !latestRelease.tag_name) {
+            console.log('[静默检查] 无法获取版本信息');
+            return;
+        }
+        
+        const latestVersion = latestRelease.tag_name;
+        const currentVersion = app.getVersion();
+        
+        // 标准化版本号（移除 v 前缀）
+        const normalizedCurrent = currentVersion.replace(/^v/, '');
+        const normalizedLatest = latestVersion.replace(/^v/, '');
+        
+        console.log(`[静默检查] 当前版本: ${normalizedCurrent}, 最新版本: ${normalizedLatest}`);
+        
+        // 比较版本
+        const comparison = compareVersion(normalizedLatest, normalizedCurrent);
+        
+        if (comparison > 0) {
+            console.log('[静默检查] 发现新版本!');
+            // 发现新版本，通知前端
+            if (mainWindow) {
+                mainWindow.webContents.send('update-available-silent', {
+                    currentVersion: currentVersion,
+                    version: normalizedLatest,
+                    releaseDate: latestRelease.published_at ? latestRelease.published_at.split('T')[0] : '未知',
+                    releaseNotes: latestRelease.body || '暂无更新说明'
+                });
+            }
+        } else {
+            console.log('[静默检查] 当前已是最新版本');
+        }
+    } catch (error) {
+        // 静默检查失败不显示错误，只记录日志
+        console.error('[静默检查] 检查更新失败:', error.message);
+    }
+});
+
 // 比较版本号
 function compareVersion(v1, v2) {
     const parts1 = v1.replace(/^v/, '').split('.').map(Number);
@@ -1254,6 +1689,17 @@ function compareVersion(v1, v2) {
 // 存储当前更新信息（用于自定义下载）
 let currentUpdateInfo = null;
 
+// 存储当前使用的镜像索引和原始 URL（用于镜像切换）
+let currentMirrorState = {
+    mirrorIndex: 0,  // 当前使用的镜像索引
+    originalUrls: {},  // 保存原始 URL（key: file index, value: original URL）
+    retryCount: 0,  // 当前镜像的重试次数
+    maxRetriesPerMirror: 2  // 每个镜像最多重试次数
+};
+
+// 待处理的错误（用于延迟显示，观察是否有下载进度）
+let updateErrorPending = null;
+
 // 存储下载状态信息（用于断点续传和已下载文件复用）
 let downloadState = {
     version: null,          // 下载的版本号
@@ -1263,39 +1709,148 @@ let downloadState = {
     expectedSize: 0         // 预期文件大小
 };
 
+// 保存已下载的安装包路径（用于跳过下载后的安装）
+let cachedInstallerPath = null;
+
 // 检查是否已有完整下载的安装包
 function checkExistingDownload(version, downloadDir) {
-    const pendingDir = path.join(downloadDir, 'pending');
-    if (!fs.existsSync(pendingDir)) {
-        return null;
+    console.log('=== 检查已有安装包 ===');
+    // 标准化版本号（移除 v 前缀）
+    const normalizedVersion = version.replace(/^v/, '');
+    console.log('版本:', normalizedVersion);
+    console.log('downloadDir:', downloadDir);
+    
+    // 首先检查 electron-updater 是否已有下载的文件
+    try {
+        const updaterFile = autoUpdater.downloadedUpdateHelper?.file;
+        if (updaterFile && fs.existsSync(updaterFile)) {
+            const stat = fs.statSync(updaterFile);
+            if (stat.size > 10 * 1024 * 1024) {
+                console.log(`✓ electron-updater 已有下载文件: ${updaterFile}`);
+                console.log(`  文件大小: ${(stat.size / (1024 * 1024)).toFixed(2)} MB`);
+                cachedInstallerPath = updaterFile;
+                return {
+                    path: updaterFile,
+                    size: stat.size,
+                    fileName: path.basename(updaterFile)
+                };
+            }
+        }
+    } catch (e) {
+        console.log('检查 electron-updater 文件失败:', e.message);
     }
     
-    // 构造预期的文件名
+    // 检查之前缓存的路径
+    if (cachedInstallerPath && fs.existsSync(cachedInstallerPath)) {
+        try {
+            const stat = fs.statSync(cachedInstallerPath);
+            if (stat.size > 10 * 1024 * 1024) {
+                console.log(`✓ 使用缓存的安装包路径: ${cachedInstallerPath}`);
+                return {
+                    path: cachedInstallerPath,
+                    size: stat.size,
+                    fileName: path.basename(cachedInstallerPath)
+                };
+            }
+        } catch (e) {}
+    }
+    
+    // 构造预期的文件名（使用标准化的版本号）
     let expectedFileName = null;
     if (process.platform === 'win32') {
-        expectedFileName = `StudentInfoTool-Setup-${version}.exe`;
+        expectedFileName = `StudentInfoTool-Setup-${normalizedVersion}.exe`;
     } else if (process.platform === 'darwin') {
-        expectedFileName = `StudentInfoTool-${version}.dmg`;
+        expectedFileName = `StudentInfoTool-${normalizedVersion}.dmg`;
     } else {
-        expectedFileName = `StudentInfoTool-${version}.AppImage`;
+        expectedFileName = `StudentInfoTool-${normalizedVersion}.AppImage`;
     }
     
-    const expectedPath = path.join(pendingDir, expectedFileName);
+    console.log('预期文件名:', expectedFileName);
     
-    // 检查文件是否存在
-    if (fs.existsSync(expectedPath)) {
-        const stat = fs.statSync(expectedPath);
-        // 检查文件大小是否合理（至少 1MB）
-        if (stat.size > 1024 * 1024) {
-            console.log(`发现已下载的安装包: ${expectedPath} (${(stat.size / (1024 * 1024)).toFixed(2)} MB)`);
-            return {
-                path: expectedPath,
-                size: stat.size,
-                fileName: expectedFileName
-            };
+    // 检查所有可能的位置
+    const possibleDirs = [
+        path.join(downloadDir, 'pending'),
+        downloadDir,
+        path.join(app.getPath('userData'), 'pending'),
+        path.join(app.getPath('userData'), app.getName() + '-updater', 'pending'),
+        // Windows Local 目录
+        process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, app.getName(), 'pending') : null,
+        process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, app.getName() + '-updater', 'pending') : null,
+        // autoUpdater 的 cacheDir
+        autoUpdater.cacheDir ? path.join(autoUpdater.cacheDir, 'pending') : null,
+        autoUpdater.cacheDir || null,
+        // 临时目录
+        path.join(require('os').tmpdir(), 'StudentInfoTool-updater'),
+    ].filter(d => d && d.length > 0);
+    
+    console.log('检查目录列表:', possibleDirs);
+    
+    for (const dir of possibleDirs) {
+        if (!fs.existsSync(dir)) {
+            continue;
+        }
+        
+        console.log(`检查目录: ${dir}`);
+        
+        const expectedPath = path.join(dir, expectedFileName);
+        
+        // 检查精确匹配的文件
+        if (fs.existsSync(expectedPath)) {
+            try {
+                const stat = fs.statSync(expectedPath);
+                // 检查文件大小是否合理（至少 10MB）
+                if (stat.size > 10 * 1024 * 1024) {
+                    console.log(`✓ 发现已下载的安装包: ${expectedPath}`);
+                    console.log(`  文件大小: ${(stat.size / (1024 * 1024)).toFixed(2)} MB`);
+                    cachedInstallerPath = expectedPath;
+                    return {
+                        path: expectedPath,
+                        size: stat.size,
+                        fileName: expectedFileName
+                    };
+                }
+            } catch (e) {
+                console.log(`检查文件失败: ${expectedPath}`, e.message);
+            }
+        }
+        
+        // 检查目录中是否有匹配的文件（模糊匹配）
+        try {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+                const fileLower = file.toLowerCase();
+                // 匹配多种可能的文件名格式
+                const isSetupFile = (
+                    (fileLower.includes('setup') || fileLower.includes('studentinfotool')) &&
+                    (file.includes(normalizedVersion) || file.includes(version)) &&
+                    (file.endsWith('.exe') || file.endsWith('.dmg') || file.endsWith('.AppImage'))
+                );
+                
+                if (isSetupFile) {
+                    const filePath = path.join(dir, file);
+                    try {
+                        const stat = fs.statSync(filePath);
+                        if (stat.size > 10 * 1024 * 1024) {
+                            console.log(`✓ 发现已下载的安装包（模糊匹配）: ${filePath}`);
+                            console.log(`  文件大小: ${(stat.size / (1024 * 1024)).toFixed(2)} MB`);
+                            cachedInstallerPath = filePath;
+                            return {
+                                path: filePath,
+                                size: stat.size,
+                                fileName: file
+                            };
+                        }
+                    } catch (e) {
+                        // 忽略单个文件的错误
+                    }
+                }
+            }
+        } catch (e) {
+            // 目录不可读，跳过
         }
     }
     
+    console.log('未找到已下载的安装包');
     return null;
 }
 
@@ -1314,20 +1869,103 @@ ipcMain.on('download-update', async (event) => {
         const version = currentUpdateInfo.version;
         console.log('目标版本:', version);
         
-        event.reply('update-downloading');
+        // ============ 检查是否已有完整的安装包 ============
+        const downloadDir = getDownloadDir();
+        const existingDownload = checkExistingDownload(version, downloadDir);
+        
+        if (existingDownload) {
+            console.log('=== 发现已有完整安装包，跳过下载 ===');
+            console.log('文件路径:', existingDownload.path);
+            console.log('文件大小:', (existingDownload.size / (1024 * 1024)).toFixed(2), 'MB');
+            
+            // 直接发送下载完成事件
+            event.reply('update-downloading', { mirrorName: '本地缓存' });
+            
+            // 模拟进度 100%
+            setTimeout(() => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('update-progress', {
+                        percent: 100,
+                        bytesPerSecond: 0,
+                        transferred: existingDownload.size,
+                        total: existingDownload.size,
+                        mirrorName: '本地缓存（已下载）'
+                    });
+                }
+            }, 100);
+            
+            // 触发下载完成
+            setTimeout(() => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('update-downloaded', {
+                        version: version,
+                        releaseNotes: currentUpdateInfo.releaseNotes || '',
+                        releaseDate: currentUpdateInfo.releaseDate || ''
+                    });
+                }
+                console.log('✓ 使用已有安装包，无需重新下载');
+            }, 500);
+            
+            return;
+        }
+        
+        console.log('未找到已有安装包，开始下载...');
+        // ============ 检查结束 ============
+        
+        // 重置镜像状态（开始新的下载尝试）
+        currentMirrorState.mirrorIndex = 0;
+        currentMirrorState.originalUrls = {};
+        currentMirrorState.retryCount = 0;  // 重置重试计数
+        
+        // 获取当前使用的镜像名称（重置后应该是第一个镜像）
+        let mirrorName = null;
+        const currentMirror = GITHUB_MIRRORS[currentMirrorState.mirrorIndex];
+        if (currentMirror) {
+            mirrorName = currentMirror.name;
+        }
+        
+        // 发送下载开始事件，包含镜像信息
+        event.reply('update-downloading', {
+            mirrorName: mirrorName
+        });
         
         // 修改 updateInfo 中的 URL 为镜像 URL（加速下载）
         // electron-updater 会使用 autoUpdater.updateInfo 中的 URL 下载
-        if (autoUpdater.updateInfo && autoUpdater.updateInfo.files) {
-            console.log('=== 使用镜像加速下载 ===');
-            autoUpdater.updateInfo.files.forEach((file, index) => {
-                const originalUrl = file.url;
-                if (originalUrl && originalUrl.includes('github.com')) {
+        // 同时也要修改 currentUpdateInfo，确保一致性
+        if (currentUpdateInfo && currentUpdateInfo.files) {
+            console.log('=== 下载前确保使用镜像 URL ===');
+            currentUpdateInfo.files.forEach((file, index) => {
+                if (file.url && file.url.includes('github.com')) {
+                    // 先提取原始 URL（如果已经是镜像 URL，先还原）
+                    const originalUrl = extractOriginalUrl(file.url);
+                    // 保存原始 URL（用于镜像切换）
+                    currentMirrorState.originalUrls[index] = originalUrl;
                     const mirrorUrl = transformToMirrorUrl(originalUrl, 0);  // 使用第一个镜像
                     file.url = mirrorUrl;
                     console.log(`文件 ${index + 1}:`);
                     console.log(`  原始 URL: ${originalUrl}`);
-                    console.log(`  镜像 URL: ${mirrorUrl}`);
+                    console.log(`  镜像 URL: ${mirrorUrl} (镜像: ${GITHUB_MIRRORS[0].name})`);
+                }
+            });
+        }
+        
+        if (autoUpdater.updateInfo && autoUpdater.updateInfo.files) {
+            console.log('=== 修改 autoUpdater.updateInfo 中的 URL 为镜像 ===');
+            autoUpdater.updateInfo.files.forEach((file, index) => {
+                // 优先使用已保存的原始 URL，否则从当前 URL 提取
+                let originalUrl = currentMirrorState.originalUrls[index];
+                if (!originalUrl && file.url) {
+                    originalUrl = extractOriginalUrl(file.url);
+                    // 保存原始 URL
+                    currentMirrorState.originalUrls[index] = originalUrl;
+                }
+                
+                if (originalUrl && originalUrl.includes('github.com')) {
+                    const mirrorUrl = transformToMirrorUrl(originalUrl, 0);  // 使用第一个镜像
+                    file.url = mirrorUrl;
+                    console.log(`autoUpdater 文件 ${index + 1}:`);
+                    console.log(`  原始 URL: ${originalUrl}`);
+                    console.log(`  镜像 URL: ${mirrorUrl} (镜像: ${GITHUB_MIRRORS[0].name})`);
                 }
             });
         }
@@ -1362,31 +2000,44 @@ ipcMain.on('install-update', async (event) => {
     }
     
     try {
-        // 获取 electron-updater 下载的安装包路径
-        const downloadedFile = autoUpdater.downloadedUpdateHelper?.file;
+        // 按优先级查找安装包路径
+        // 1. 首先检查缓存的安装包路径（跳过下载时使用的）
+        // 2. 然后检查 electron-updater 下载的文件
+        // 3. 最后在缓存目录中搜索
         
-        if (!downloadedFile || !fs.existsSync(downloadedFile)) {
-            // 尝试在缓存目录中查找安装包
-            const cacheDir = autoUpdater.cacheDir || path.join(app.getPath('userData'), 'pending');
-            const version = currentUpdateInfo?.version;
-            
-            let installerPath = null;
-            if (version && fs.existsSync(cacheDir)) {
-                const files = fs.readdirSync(cacheDir);
-                const installer = files.find(f => f.includes('Setup') && f.endsWith('.exe'));
-                if (installer) {
-                    installerPath = path.join(cacheDir, installer);
-                }
-            }
-            
-            if (!installerPath || !fs.existsSync(installerPath)) {
-                throw new Error('找不到下载的安装包，请重新下载');
-            }
-            
-            pendingInstallerPath = installerPath;
-        } else {
-            pendingInstallerPath = downloadedFile;
+        const version = currentUpdateInfo?.version;
+        let foundPath = null;
+        
+        // 1. 检查缓存的路径
+        if (cachedInstallerPath && fs.existsSync(cachedInstallerPath)) {
+            console.log('使用缓存的安装包路径:', cachedInstallerPath);
+            foundPath = cachedInstallerPath;
         }
+        
+        // 2. 检查 electron-updater 的文件
+        if (!foundPath) {
+            const downloadedFile = autoUpdater.downloadedUpdateHelper?.file;
+            if (downloadedFile && fs.existsSync(downloadedFile)) {
+                console.log('使用 electron-updater 下载的文件:', downloadedFile);
+                foundPath = downloadedFile;
+            }
+        }
+        
+        // 3. 在缓存目录中搜索
+        if (!foundPath && version) {
+            const downloadDir = getDownloadDir();
+            const existingDownload = checkExistingDownload(version, downloadDir);
+            if (existingDownload) {
+                console.log('在缓存目录中找到安装包:', existingDownload.path);
+                foundPath = existingDownload.path;
+            }
+        }
+        
+        if (!foundPath || !fs.existsSync(foundPath)) {
+            throw new Error('找不到下载的安装包，请重新下载');
+        }
+        
+        pendingInstallerPath = foundPath;
         
         console.log('安装包路径:', pendingInstallerPath);
         console.log('文件大小:', (fs.statSync(pendingInstallerPath).size / (1024 * 1024)).toFixed(2), 'MB');
@@ -1433,129 +2084,98 @@ userData 目录: ${userDataDir}
         fs.appendFileSync(logPath, initialLog, 'utf8');
         console.log('初始日志已写入:', logPath);
         
-        // 创建批处理脚本（带详细日志）
-        const batchPath = path.join(tempDir, 'install_update.cmd');
-        const batchContent = `@echo off
-chcp 65001 >nul 2>&1
-setlocal enabledelayedexpansion
+        // 使用 VBScript 启动安装程序（支持 Unicode 路径）
+        const vbsPath = path.join(tempDir, 'run_installer.vbs');
+        
+        // VBScript 内容（支持中文路径）
+        const vbsContent = `
+Set WshShell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
 
-set LOGFILE="${logPath.replace(/\\/g, '\\\\')}"
-set PID=${currentPid}
-set MAX_WAIT=30
-set WAIT_COUNT=0
+installerPath = "${pendingInstallerPath.replace(/\\/g, '\\\\')}"
+markerPath = "${updateMarkerPath.replace(/\\/g, '\\\\')}"
+logPath = "${logPath.replace(/\\/g, '\\\\')}"
+targetPid = "${currentPid}"
+newVersion = "${newVersion}"
 
-echo ========================================== >> %LOGFILE%
-echo [%date% %time%] 更新安装脚本开始执行 >> %LOGFILE%
-echo ========================================== >> %LOGFILE%
-echo [%date% %time%] 目标进程 PID: %PID% >> %LOGFILE%
-echo [%date% %time%] 安装包目录: ${installerDir.replace(/\\/g, '\\\\')} >> %LOGFILE%
-echo [%date% %time%] 安装包名称: ${installerName} >> %LOGFILE%
-echo [%date% %time%] 应用安装目录: ${appInstallDir.replace(/\\/g, '\\\\')} >> %LOGFILE%
-echo [%date% %time%] 应用可执行文件: ${appExeName} >> %LOGFILE%
-echo [%date% %time%] 新版本: ${newVersion} >> %LOGFILE%
+Sub WriteLog(msg)
+    On Error Resume Next
+    Set f = fso.OpenTextFile(logPath, 8, True)
+    f.WriteLine "[" & Now & "] " & msg
+    f.Close
+End Sub
 
-echo [%date% %time%] 开始等待应用退出... >> %LOGFILE%
+Function IsProcessRunning(pid)
+    On Error Resume Next
+    Set wmi = GetObject("winmgmts:\\\\.\\root\\cimv2")
+    Set ps = wmi.ExecQuery("Select * from Win32_Process Where ProcessId=" & pid)
+    IsProcessRunning = (ps.Count > 0)
+End Function
 
-:wait_loop
-tasklist /FI "PID eq %PID%" 2>nul | find /i "%PID%" >nul
-if %errorlevel% neq 0 goto :app_exited
-set /a WAIT_COUNT+=1
-echo [%date% %time%] 等待中... (%WAIT_COUNT%/%MAX_WAIT%) >> %LOGFILE%
-if %WAIT_COUNT% geq %MAX_WAIT% (
-    echo [%date% %time%] 等待超时，强制继续 >> %LOGFILE%
-    goto :app_exited
-)
-ping 127.0.0.1 -n 2 >nul
-goto :wait_loop
+WriteLog "VBS Script started"
+WriteLog "Installer: " & installerPath
+WriteLog "Waiting for PID: " & targetPid
 
-:app_exited
-echo [%date% %time%] 应用已退出，等待 2 秒确保文件释放... >> %LOGFILE%
-ping 127.0.0.1 -n 3 >nul
+' Wait for app to exit (max 30 seconds)
+waitCount = 0
+Do While IsProcessRunning(targetPid) And waitCount < 30
+    WScript.Sleep 1000
+    waitCount = waitCount + 1
+Loop
 
-echo [%date% %time%] 切换到安装包目录... >> %LOGFILE%
-cd /d "${installerDir.replace(/\\/g, '\\\\')}"
-echo [%date% %time%] 当前目录: %CD% >> %LOGFILE%
+WriteLog "App exited, waiting 2 seconds..."
+WScript.Sleep 2000
 
-echo [%date% %time%] 检查安装包是否存在... >> %LOGFILE%
-if exist "${installerName}" (
-    echo [%date% %time%] 安装包存在，开始静默安装... >> %LOGFILE%
-) else (
-    echo [%date% %time%] 错误：安装包不存在！ >> %LOGFILE%
-    goto :error
-)
+' Check installer exists
+If Not fso.FileExists(installerPath) Then
+    WriteLog "ERROR: Installer not found: " & installerPath
+    MsgBox "Installer not found!", vbCritical, "Update Error"
+    WScript.Quit 1
+End If
 
-echo [%date% %time%] 执行: "${installerName}" /S >> %LOGFILE%
-"${installerName}" /S
-set INSTALL_ERROR=%errorlevel%
-echo [%date% %time%] 安装程序返回代码: %INSTALL_ERROR% >> %LOGFILE%
+WriteLog "Starting installer..."
 
-echo [%date% %time%] 等待安装完成 (3秒)... >> %LOGFILE%
-ping 127.0.0.1 -n 4 >nul
+' Run installer and wait
+ret = WshShell.Run("""" & installerPath & """", 1, True)
 
-echo [%date% %time%] 创建更新完成标记文件... >> %LOGFILE%
-echo {"version":"${newVersion}","timestamp":"%date% %time%","success":true,"installExitCode":%INSTALL_ERROR%} > "${updateMarkerPath.replace(/\\/g, '\\\\')}"
-echo [%date% %time%] 标记文件已创建: ${updateMarkerPath.replace(/\\/g, '\\\\')} >> %LOGFILE%
+WriteLog "Installer finished with code: " & ret
 
-echo [%date% %time%] 切换到应用安装目录... >> %LOGFILE%
-cd /d "${appInstallDir.replace(/\\/g, '\\\\')}"
-echo [%date% %time%] 当前目录: %CD% >> %LOGFILE%
+' Create marker file
+Set f = fso.CreateTextFile(markerPath, True)
+f.WriteLine "{""version"":""" & newVersion & """,""time"":""" & Now & """,""ok"":true}"
+f.Close
 
-echo [%date% %time%] 检查应用可执行文件是否存在... >> %LOGFILE%
-if exist "${appExeName}" (
-    echo [%date% %time%] 应用存在，准备启动... >> %LOGFILE%
-) else (
-    echo [%date% %time%] 警告：应用可执行文件不存在！尝试查找... >> %LOGFILE%
-    dir /b *.exe >> %LOGFILE% 2>&1
-)
+WriteLog "Update complete"
 
-echo [%date% %time%] 启动应用: start "" "${appExeName}" >> %LOGFILE%
-start "" "${appExeName}"
-set START_ERROR=%errorlevel%
-echo [%date% %time%] 启动命令返回代码: %START_ERROR% >> %LOGFILE%
-
-echo [%date% %time%] 更新安装脚本执行完成 >> %LOGFILE%
-echo ========================================== >> %LOGFILE%
-goto :cleanup
-
-:error
-echo [%date% %time%] 更新安装过程中发生错误 >> %LOGFILE%
-echo ========================================== >> %LOGFILE%
-
-:cleanup
-del "%~f0"
-exit
+' Cleanup
+On Error Resume Next
+fso.DeleteFile WScript.ScriptFullName
 `;
+
+        // 使用 UTF-16 LE 编码保存 VBScript（Windows 原生支持）
+        const BOM = '\ufeff';
+        fs.writeFileSync(vbsPath, BOM + vbsContent, { encoding: 'utf16le' });
+        console.log('已创建 VBS 安装脚本:', vbsPath);
+        console.log('安装包路径:', pendingInstallerPath);
         
-        // 创建 VBScript 来隐藏执行批处理
-        const vbsPath = path.join(tempDir, 'install_update.vbs');
-        const vbsContent = `Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "cmd.exe /c ""${batchPath.replace(/\\/g, '\\\\')}""", 0, False
-Set WshShell = Nothing
-`;
+        fs.appendFileSync(logPath, `[${new Date().toLocaleString()}] VBS script created: ${vbsPath}\n`, 'utf8');
+        fs.appendFileSync(logPath, `[${new Date().toLocaleString()}] Installer path: ${pendingInstallerPath}\n`, 'utf8');
         
-        fs.writeFileSync(batchPath, batchContent, { encoding: 'utf8' });
-        fs.writeFileSync(vbsPath, vbsContent, { encoding: 'utf8' });
-        console.log('已创建安装脚本:', batchPath);
-        console.log('已创建VBS脚本:', vbsPath);
-        
-        // 记录脚本创建日志
-        fs.appendFileSync(logPath, `[${new Date().toLocaleString()}] 批处理脚本已创建: ${batchPath}\n`, 'utf8');
-        fs.appendFileSync(logPath, `[${new Date().toLocaleString()}] VBS脚本已创建: ${vbsPath}\n`, 'utf8');
-        fs.appendFileSync(logPath, `[${new Date().toLocaleString()}] VBS内容:\n${vbsContent}\n`, 'utf8');
-        
-        // 使用 wscript 执行 VBScript
+        // 使用 wscript 运行 VBS 脚本
         const { spawn } = require('child_process');
         
-        const vbs = spawn('wscript.exe', ['//B', vbsPath], {
+        const proc = spawn('wscript.exe', [vbsPath], {
             detached: true,
             stdio: 'ignore',
-            windowsHide: true,
-            shell: true
+            windowsHide: false,
+            shell: false
         });
         
-        vbs.unref();
+        proc.unref();
         
-        fs.appendFileSync(logPath, `[${new Date().toLocaleString()}] VBS 进程已启动，PID: ${vbs.pid}\n`, 'utf8');
+        console.log('VBS 安装脚本已启动');
+        
+        fs.appendFileSync(logPath, `[${new Date().toLocaleString()}] 安装脚本已启动\n`, 'utf8');
         fs.appendFileSync(logPath, `[${new Date().toLocaleString()}] 准备退出应用...\n`, 'utf8');
         
         console.log('安装脚本已启动，准备退出应用...');
@@ -1999,3 +2619,4 @@ app.on('window-all-closed', () => {
 app.on('ready', () => {
     loadAppSettings();
 });
+

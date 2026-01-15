@@ -2681,8 +2681,19 @@
             showUpdateState('latest');
         });
         
-        ipcRenderer.on('update-downloading', () => {
+        ipcRenderer.on('update-downloading', (event, data) => {
             showUpdateState('downloading');
+            
+            // 显示镜像信息（如果提供）
+            const mirrorEl = document.getElementById('update-mirror-info');
+            if (mirrorEl) {
+                if (data && data.mirrorName) {
+                    mirrorEl.style.display = 'block';
+                    mirrorEl.innerHTML = `<span style="background: var(--primary-light); padding: 2px 8px; border-radius: 4px;">🚀 镜像加速: ${data.mirrorName}</span>`;
+                } else {
+                    mirrorEl.style.display = 'none';
+                }
+            }
         });
         
         ipcRenderer.on('update-progress', (event, progress) => {
@@ -2715,9 +2726,26 @@
             
             // 显示镜像加速信息
             const mirrorEl = document.getElementById('update-mirror-info');
-            if (mirrorEl && progress.mirrorName) {
+            if (mirrorEl) {
+                if (progress.mirrorName) {
+                    mirrorEl.style.display = 'block';
+                    mirrorEl.innerHTML = `<span style="background: var(--primary-light); padding: 2px 8px; border-radius: 4px;">🚀 镜像加速: ${progress.mirrorName}</span>`;
+                } else {
+                    // 如果没有镜像信息，检查是否是直连（非 GitHub URL）
+                    const detailEl = document.getElementById('update-progress-detail');
+                    if (detailEl && detailEl.textContent.includes('github.com')) {
+                        mirrorEl.style.display = 'none';
+                    }
+                }
+            }
+        });
+        
+        // 处理镜像切换重试事件
+        ipcRenderer.on('update-retrying', (event, data) => {
+            const mirrorEl = document.getElementById('update-mirror-info');
+            if (mirrorEl && data && data.mirror) {
                 mirrorEl.style.display = 'block';
-                mirrorEl.innerHTML = `<span style="background: var(--primary-light); padding: 2px 8px; border-radius: 4px;">🚀 镜像加速: ${progress.mirrorName}</span>`;
+                mirrorEl.innerHTML = `<span style="background: var(--warning-light, #fff3cd); padding: 2px 8px; border-radius: 4px; color: var(--warning, #856404);">🔄 ${data.message || `正在切换到镜像: ${data.mirror}`}</span>`;
             }
         });
         
@@ -3281,7 +3309,114 @@
             bindSettingsEvents();
             getAppInfo();
             getCacheSize();
+            
+            // 延迟 2 秒后静默检查更新（不打开弹窗）
+            setTimeout(() => {
+                console.log('静默检查更新...');
+                ipcRenderer.send('check-for-updates-silent');
+            }, 2000);
         });
+        
+        // 静默检查发现更新时的处理
+        ipcRenderer.on('update-available-silent', (event, info) => {
+            console.log('静默检查发现新版本:', info.version);
+            // 存储更新信息
+            updateInfo = info;
+            // 显示更新提示红点或弹出提示
+            showUpdateNotification(info);
+        });
+        
+        // 显示更新提示
+        function showUpdateNotification(info) {
+            // 创建更新提示 Toast
+            const toast = document.createElement('div');
+            toast.className = 'update-toast';
+            toast.innerHTML = `
+                <div class="update-toast-content">
+                    <div class="update-toast-icon">🎉</div>
+                    <div class="update-toast-text">
+                        <div class="update-toast-title">发现新版本 v${info.version}</div>
+                        <div class="update-toast-desc">点击查看更新内容</div>
+                    </div>
+                    <button class="update-toast-close" onclick="this.parentElement.parentElement.remove()">×</button>
+                </div>
+            `;
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 10000;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border-radius: 12px;
+                padding: 16px 20px;
+                box-shadow: 0 8px 32px rgba(102, 126, 234, 0.4);
+                animation: slideIn 0.3s ease-out;
+                cursor: pointer;
+                max-width: 320px;
+            `;
+            toast.querySelector('.update-toast-content').style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            `;
+            toast.querySelector('.update-toast-icon').style.cssText = `
+                font-size: 28px;
+            `;
+            toast.querySelector('.update-toast-title').style.cssText = `
+                font-weight: 600;
+                font-size: 14px;
+            `;
+            toast.querySelector('.update-toast-desc').style.cssText = `
+                font-size: 12px;
+                opacity: 0.9;
+                margin-top: 2px;
+            `;
+            toast.querySelector('.update-toast-close').style.cssText = `
+                background: rgba(255,255,255,0.2);
+                border: none;
+                color: white;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                cursor: pointer;
+                font-size: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-left: auto;
+            `;
+            
+            // 添加动画样式
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // 点击打开更新弹窗
+            toast.addEventListener('click', (e) => {
+                if (e.target.className !== 'update-toast-close') {
+                    toast.remove();
+                    openUpdateModal();
+                    // 发送事件通知主进程已查看
+                    ipcRenderer.send('check-for-updates');
+                }
+            });
+            
+            document.body.appendChild(toast);
+            
+            // 10 秒后自动消失
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.style.animation = 'slideIn 0.3s ease-out reverse';
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 10000);
+        }
     </script>
 </body>
 </html>
