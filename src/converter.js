@@ -29,11 +29,28 @@ function getYearFromClasses(classes) {
     return new Date().getFullYear();
 }
 
-// 根据学制判断层次
-function getLevel(duration, className) {
-    // 优先根据班级名称判断
+// 判断层次（层次与学制是两个独立的概念）
+// 层次：本科/专科/专升本
+// 学制：直接使用表格中的原始内容（如"四年"、"三年"、"二年"、"五年"等）
+function getLevel(levelField, className) {
+    // 优先从表格中的"层次"字段获取
+    if (levelField) {
+        const levelStr = String(levelField).trim();
+        if (levelStr.includes('专升本')) {
+            return '专升本';
+        }
+        if (levelStr.includes('专科')) {
+            return '专科';
+        }
+        if (levelStr.includes('本科')) {
+            return '本科';
+        }
+    }
+    
+    // 如果表格中没有层次字段或无法识别，则根据班级名称判断
     if (className) {
         const lowerClassName = className.toLowerCase();
+        // 注意：gbs 要在 gb 之前判断，因为 gbs 包含 gb
         if (lowerClassName.includes('gbs') || lowerClassName.includes('专升本')) {
             return '专升本';
         }
@@ -42,19 +59,6 @@ function getLevel(duration, className) {
         }
         if (lowerClassName.includes('gb') || lowerClassName.includes('本科')) {
             return '本科';
-        }
-    }
-    
-    // 根据学制判断
-    if (duration) {
-        if (duration.includes('四') || duration.includes('4')) {
-            return '本科';
-        }
-        if (duration.includes('三') || duration.includes('3')) {
-            return '专科';
-        }
-        if (duration.includes('二') || duration.includes('2')) {
-            return '专升本';
         }
     }
     
@@ -394,7 +398,7 @@ function calculateStatistics(data) {
     // 先按系、专业、班级分组
     const groups = {};
     data.forEach(row => {
-        const level = getLevel(row['学制'], row['班级名称']);
+        const level = getLevel(row['层次'], row['班级名称']);
         const key = `${row['系（部）']}_${row['专业名称']}_${row['班级名称']}_${row['学制']}`;
         
         if (!groups[key]) {
@@ -587,10 +591,12 @@ async function convertExcelToWord(excelPath, outputPath) {
         properties: {
             page: {
                 margin: {
-                    top: cmToTwip(2.54),
-                    right: cmToTwip(2.54),
-                    bottom: cmToTwip(2.54),
-                    left: cmToTwip(2.54)
+                    top: cmToTwip(0.98),
+                    right: cmToTwip(1.98),
+                    bottom: cmToTwip(1.04),
+                    left: cmToTwip(2.58),
+                    header: cmToTwip(0.9),  // 页眉上边距 0.9cm
+                    footer: cmToTwip(0.6)   // 页脚下边距 0.6cm
                 }
             }
         },
@@ -723,10 +729,12 @@ async function convertExcelToWord(excelPath, outputPath) {
         properties: {
             page: {
                 margin: {
-                    top: cmToTwip(2.54),
-                    right: cmToTwip(2.54),
-                    bottom: cmToTwip(2.54),
-                    left: cmToTwip(2.54)
+                    top: cmToTwip(0.98),
+                    right: cmToTwip(1.98),
+                    bottom: cmToTwip(1.04),
+                    left: cmToTwip(2.58),
+                    header: cmToTwip(0.9),  // 页眉上边距 0.9cm
+                    footer: cmToTwip(0.6)   // 页脚下边距 0.6cm
                 }
             }
         },
@@ -761,10 +769,12 @@ async function convertExcelToWord(excelPath, outputPath) {
         const sectionProperties = {
             page: {
                 margin: {
-                    top: cmToTwip(2.54),
-                    right: cmToTwip(2.54),
-                    bottom: cmToTwip(2.54),
-                    left: cmToTwip(2.54)
+                    top: cmToTwip(0.98),
+                    right: cmToTwip(1.98),
+                    bottom: cmToTwip(1.04),
+                    left: cmToTwip(2.58),
+                    header: cmToTwip(0.9),  // 页眉上边距 0.9cm
+                    footer: cmToTwip(0.6)   // 页脚下边距 0.6cm
                 },
                 pageNumbers: isFirstPageNumberedSection ? {
                     start: 1,
@@ -786,7 +796,7 @@ async function convertExcelToWord(excelPath, outputPath) {
                 new Paragraph({
                     children: [new TextRun({ text: `${year}年${level}新生情况统计表`, size: 36, font: "黑体", bold: true })],
                     alignment: AlignmentType.CENTER,
-                    spacing: { after: 400 }
+                    spacing: { before: 1200, after: 400 }  // 段前60磅，段后20磅
                 }),
                 createLevelSummaryTable(statistics, level, year)
             ]
@@ -919,7 +929,9 @@ async function convertExcelToWord(excelPath, outputPath) {
                                     top: cmToTwip(0.98),
                                     right: cmToTwip(1.98),
                                     bottom: cmToTwip(1.04),
-                                    left: cmToTwip(2.58)
+                                    left: cmToTwip(2.58),
+                                    header: cmToTwip(0.9),  // 页眉上边距 0.9cm
+                                    footer: cmToTwip(0.6)   // 页脚下边距 0.6cm
                                 }
                             }
                         },
