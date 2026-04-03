@@ -186,12 +186,34 @@ ipcMain.on('start-conversion', async (event, { excelPath }) => {
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const seconds = String(now.getSeconds()).padStart(2, '0');
         const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
-        
+
         const outputPath = path.join(path.dirname(excelPath), `新生名册_${timestamp}.docx`);
         await convertExcelToWord(excelPath, outputPath);
         event.reply('conversion-success', outputPath);
     } catch (error) {
         event.reply('conversion-error', error.message);
+    }
+});
+
+ipcMain.on('download-template', async (event) => {
+    const templatePath = path.join(__dirname, 'assets', '学生信息模板.xlsx');
+
+    const result = await dialog.showSaveDialog(mainWindow, {
+        title: '保存模板文件',
+        defaultPath: '学生信息模板.xlsx',
+        filters: [{ name: 'Excel Files', extensions: ['xlsx'] }]
+    });
+
+    if (result.canceled || !result.filePath) {
+        event.reply('template-downloaded', { success: false, message: '已取消' });
+        return;
+    }
+
+    try {
+        await fs.copyFile(templatePath, result.filePath);
+        event.reply('template-downloaded', { success: true, path: result.filePath });
+    } catch (error) {
+        event.reply('template-downloaded', { success: false, message: error.message });
     }
 });
 

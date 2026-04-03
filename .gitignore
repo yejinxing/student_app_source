@@ -55,3 +55,6 @@ Thumbs.db
 # 打包产物
 *.nsis
 *.zip
+
+# Claude Code 配置文件
+CLAUDE.md

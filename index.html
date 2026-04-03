@@ -559,13 +559,27 @@
             box-shadow: none;
             font-weight: 500;
         }
-        
+
         .btn-secondary:hover {
             background: var(--border);
             color: var(--text-primary);
             box-shadow: var(--shadow-sm);
         }
-        
+
+        .btn-outline {
+            background: transparent;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            box-shadow: none;
+            font-weight: 500;
+        }
+
+        .btn-outline:hover {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
         /* 危险按钮样式 */
         .btn-danger {
             background: #ef4444;
@@ -2167,8 +2181,9 @@
                     选择包含学生信息的 Excel 文件，系统将按照预定格式自动生成 Word 文档。
                 </p>
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-            <button class="btn" onclick="selectFile()">选择 Excel 文件</button>
+                    <button class="btn" onclick="selectFile()">选择 Excel 文件</button>
                     <button id="convert-btn" class="btn btn-secondary" onclick="startConversion()" disabled>开始转换</button>
+                    <button class="btn btn-outline" onclick="downloadTemplate()">下载模板</button>
                 </div>
             <div id="file-path">未选择文件</div>
             <div id="status" class="status"></div>
@@ -2576,6 +2591,21 @@
             status.innerText = `转换失败: ${message}`;
             document.getElementById('convert-btn').disabled = false;
             document.getElementById('convert-btn').innerText = '开始转换';
+        });
+
+        function downloadTemplate() {
+            ipcRenderer.send('download-template');
+        }
+
+        ipcRenderer.on('template-downloaded', (event, result) => {
+            const status = document.getElementById('status');
+            if (result.success) {
+                status.className = 'status success';
+                status.innerHTML = `模板已保存至: <a href="#" class="file-link" onclick="shell.openPath('${result.path.replace(/\\/g, '\\\\')}'); return false;">${result.path}</a>`;
+            } else {
+                status.className = 'status error';
+                status.innerText = result.message === '已取消' ? '已取消保存' : `保存失败: ${result.message}`;
+            }
         });
 
         // ===== 更新功能 =====
