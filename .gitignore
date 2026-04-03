@@ -58,3 +58,4 @@ Thumbs.db
 
 # Claude Code 配置文件
 CLAUDE.md
+.claude/
