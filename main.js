@@ -217,6 +217,33 @@ ipcMain.on('download-template', async (event) => {
     }
 });
 
+ipcMain.on('download-audit-template', async (event) => {
+    const templatePath = path.join(__dirname, 'assets', '准考证审核数据模板.xlsx');
+
+    const result = await dialog.showSaveDialog(mainWindow, {
+        title: '保存审核模板',
+        defaultPath: '准考证审核数据模板.xlsx',
+        filters: [{ name: 'Excel Files', extensions: ['xlsx'] }]
+    });
+
+    if (result.canceled || !result.filePath) {
+        event.reply('audit-template-downloaded', { success: false, message: '已取消' });
+        return;
+    }
+
+    try {
+        // 如果本地还没有这个模板，可以生成一个或者假设已经在 assets 目录下
+        if (!fs.existsSync(templatePath)) {
+            event.reply('audit-template-downloaded', { success: false, message: '未找到模板源文件，请更新程序资产。' });
+            return;
+        }
+        await fs.copyFile(templatePath, result.filePath);
+        event.reply('audit-template-downloaded', { success: true, path: result.filePath });
+    } catch (error) {
+        event.reply('audit-template-downloaded', { success: false, message: error.message });
+    }
+});
+
 // ===== 自动更新功能 (使用 electron-updater) =====
 
 // 仓库信息
@@ -2630,6 +2657,36 @@ ipcMain.on('get-app-info', (event) => {
 // 打开外部链接
 ipcMain.on('open-external-url', (event, url) => {
     shell.openExternal(url);
+});
+
+// ===== 准考证审核相关 IPC 处理 =====
+const { auditTickets } = require('./src/ticketAuditor');
+
+ipcMain.handle('select-pdf-dir', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory'],
+        title: '选择准考证 PDF 文件夹'
+    });
+    if (!result.canceled) {
+        return result.filePaths[0];
+    }
+    return null;
+});
+
+ipcMain.on('start-ticket-audit', async (event, options) => {
+    const { pdfDir, excelPath, subjectConfigs } = options;
+    try {
+        const results = await auditTickets(pdfDir, excelPath, subjectConfigs, (pFiles, tFiles, pPages, tPages, currentFile) => {
+            event.reply('audit-progress', { pFiles, tFiles, pPages, tPages, currentFile });
+        });
+        event.reply('audit-success', results);
+    } catch (error) {
+        event.reply('audit-error', error.message);
+    }
+});
+
+ipcMain.on('open-pdf-file', (event, filePath) => {
+    shell.openPath(filePath);
 });
 
 // 窗口关闭处理

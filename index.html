@@ -1797,6 +1797,16 @@
                 </span>
                 <span class="nav-label">文档转换</span>
             </div>
+            <div class="nav-item" onclick="showPage('ticket-audit')" title="准考证审核">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <path d="M9 15l2 2 4-4"/>
+                    </svg>
+                </span>
+                <span class="nav-label">准考证审核</span>
+            </div>
             <div class="nav-item" onclick="showPage('photo-rename')" title="照片重命名">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2118,6 +2128,21 @@
                     <span class="quick-action-arrow">→</span>
                 </div>
                 
+                <div class="quick-action-card" onclick="showPageByName('ticket-audit')">
+                    <div class="quick-action-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <path d="M9 15l2 2 4-4"/>
+                        </svg>
+                    </div>
+                    <div class="quick-action-info">
+                        <h4>准考证审核</h4>
+                        <p>核对 PDF 准考证信息</p>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
+                </div>
+                
                 <div class="quick-action-card" onclick="showPageByName('photo-rename')">
                     <div class="quick-action-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2194,6 +2219,97 @@
             <div id="status" class="status"></div>
         </div>
         </div>
+        <!-- 准考证审核 -->
+        <div id="ticket-audit-page" style="display: none;">
+            <div class="page-header">
+                <h2>准考证审核</h2>
+                <p class="page-header-subtitle">批量核对 PDF 准考证信息与 Excel 数据是否一致</p>
+            </div>
+
+            <!-- 第一步：数据源配置 -->
+            <div class="card" style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 16px;">
+                    <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--primary);">
+                        <span style="display: inline-block; width: 24px; height: 24px; background: var(--primary); color: white; border-radius: 50%; text-align: center; line-height: 24px; margin-right: 8px;">1</span>导入数据源
+                    </h3>
+                    <button class="btn btn-outline btn-sm" onclick="downloadAuditTemplate()">下载模板</button>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">PDF 准考证文件夹</label>
+                        <div class="input-group">
+                            <input type="text" id="audit-pdf-dir" readonly placeholder="选择包含 PDF 的目录...">
+                            <button class="btn btn-secondary" onclick="selectAuditPdfDir()">浏览</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label class="form-label">考生信息 Excel</label>
+                        <div class="input-group">
+                            <input type="text" id="audit-excel-file" readonly placeholder="选择含排考数据的 Excel...">
+                            <button class="btn btn-secondary" onclick="selectAuditExcel()">浏览</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第二步：科目映射配置 (默认隐藏) -->
+            <div class="card" id="subject-config-card" style="display: none; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 16px;">
+                    <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--primary);">
+                        <span style="display: inline-block; width: 24px; height: 24px; background: var(--primary); color: white; border-radius: 50%; text-align: center; line-height: 24px; margin-right: 8px;">2</span>配置科目与时间
+                    </h3>
+                    <button class="btn btn-primary" id="start-audit-btn" onclick="startTicketAudit()" style="padding: 8px 24px; font-size: 14px; box-shadow: var(--shadow-sm);">开始智能审核</button>
+                </div>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">已自动读取 Excel 考场列，请核对 PDF 上的显示名称，并点选考试时间：</p>
+                
+                <div id="subject-config-list" style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- 动态插入 -->
+                </div>
+            </div>
+
+            <div class="card" id="audit-result-card" style="display: none;">
+                <h3>审核进度与结果</h3>
+                <div class="update-progress-container" style="margin-bottom: 20px;">
+                    <div class="update-progress-bar">
+                        <div class="update-progress-fill" id="audit-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="update-progress-text">
+                        <span id="audit-progress-text">准备开始...</span>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                    <div id="audit-summary" style="font-weight: bold; font-size: 16px;"></div>
+                    <div id="audit-filter-container" style="display: none; align-items: center; gap: 12px;">
+                        <div class="input-group" style="width: 200px;">
+                            <input type="text" id="audit-search-input" placeholder="搜索姓名/准考证号..." oninput="filterAuditResults()" style="padding: 6px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; background: var(--bg-primary); color: var(--text);">
+                        </div>
+                        <select id="audit-status-filter" onchange="filterAuditResults()" style="padding: 6px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text); cursor: pointer;">
+                            <option value="all">全部状态</option>
+                            <option value="success">✅ 仅看通过</option>
+                            <option value="error">❌ 仅看异常</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--border); padding-bottom: 8px;">
+                                <th style="padding: 10px; width: 60px; text-align: center;">状态</th>
+                                <th style="padding: 10px; width: 150px; text-align: center;">准考证号/身份证</th>
+                                <th style="padding: 10px; width: 80px; text-align: center;">姓名</th>
+                                <th style="padding: 10px; width: 220px; text-align: left;">文件名(页码)</th>
+                                <th style="padding: 10px; text-align: left;">问题说明</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-result-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <div id="photo-rename-page" style="display:none;">
             <div class="page-header">
                 <h2>照片重命名</h2>
@@ -2539,6 +2655,7 @@
         function showPage(page) {
             document.getElementById('home-page').style.display = page === 'home' ? 'block' : 'none';
             document.getElementById('convert-page').style.display = page === 'convert' ? 'block' : 'none';
+            document.getElementById('ticket-audit-page').style.display = page === 'ticket-audit' ? 'block' : 'none';
             document.getElementById('photo-rename-page').style.display = page === 'photo-rename' ? 'block' : 'none';
             document.getElementById('settings-page').style.display = page === 'settings' ? 'block' : 'none';
             document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => el.classList.remove('active'));
@@ -2546,17 +2663,17 @@
             event.currentTarget.classList.add('active');
             }
         }
-        
+
         // 通过页面名称显示页面（用于快捷入口）
         function showPageByName(page) {
             document.getElementById('home-page').style.display = page === 'home' ? 'block' : 'none';
             document.getElementById('convert-page').style.display = page === 'convert' ? 'block' : 'none';
+            document.getElementById('ticket-audit-page').style.display = page === 'ticket-audit' ? 'block' : 'none';
             document.getElementById('photo-rename-page').style.display = page === 'photo-rename' ? 'block' : 'none';
             document.getElementById('settings-page').style.display = page === 'settings' ? 'block' : 'none';
-            
+
             // 更新侧边栏选中状态
-            const pageIndex = {'home': 0, 'convert': 1, 'photo-rename': 2, 'settings': 3};
-            document.querySelectorAll('.sidebar-nav .nav-item').forEach((el, index) => {
+            const pageIndex = {'home': 0, 'convert': 1, 'ticket-audit': 2, 'photo-rename': 3, 'settings': 4};            document.querySelectorAll('.sidebar-nav .nav-item').forEach((el, index) => {
                 el.classList.toggle('active', index === pageIndex[page]);
             });
         }
@@ -2569,6 +2686,239 @@
             selectedPath = path;
             document.getElementById('file-path').innerText = `已选择: ${path}`;
             document.getElementById('convert-btn').disabled = false;
+        });
+
+        // 准考证审核相关逻辑
+        let auditPdfDir = '';
+        let auditExcelFile = '';
+
+        function selectAuditPdfDir() {
+            ipcRenderer.invoke('select-pdf-dir').then(path => {
+                if (path) {
+                    auditPdfDir = path;
+                    document.getElementById('audit-pdf-dir').value = path;
+                }
+            });
+        }
+
+        function selectAuditExcel() {
+            // 复用并覆盖一次性的 selected-file 处理器以获取 Excel
+            ipcRenderer.send('select-file'); 
+            const onceHandler = (event, path) => {
+                auditExcelFile = path;
+                document.getElementById('audit-excel-file').value = path;
+                ipcRenderer.removeListener('selected-file', onceHandler);
+                
+                // 获取 Excel 列名用于配置科目
+                ipcRenderer.send('get-excel-columns', path);
+            };
+            ipcRenderer.once('selected-file', onceHandler);
+        }
+
+        function generateTimeOptions() {
+            let options = '<option value="">请选择</option>';
+            for (let h = 7; h <= 18; h++) {
+                for (let m of ['00', '15', '30', '45']) {
+                    let time = `${h.toString().padStart(2, '0')}:${m}`;
+                    options += `<option value="${time}">${time}</option>`;
+                }
+            }
+            return options;
+        }
+
+        // 监听 Excel 列名返回，动态生成科目配置界面
+        ipcRenderer.on('excel-columns', (event, columns) => {
+            const subjectCard = document.getElementById('subject-config-card');
+            const subjectList = document.getElementById('subject-config-list');
+            subjectList.innerHTML = '';
+            
+            // 查找所有以 "考场号" 结尾的列名，提取科目名称前缀
+            const subjects = [];
+            columns.forEach(col => {
+                if (col && typeof col === 'string' && col.endsWith('考场号')) {
+                    const prefix = col.replace('考场号', '');
+                    if (prefix && prefix !== '考点') { // 排除“考点考场号”这种非科目的情况
+                        subjects.push(prefix);
+                    }
+                }
+            });
+            
+            if (subjects.length > 0) {
+                subjectCard.style.display = 'block';
+                const timeOptions = generateTimeOptions();
+                
+                subjects.forEach((subjectPrefix, index) => {
+                    let defaultPdfName = subjectPrefix.replace('科目', '').replace('1', '一').replace('2', '二').replace('3', '三');
+                    // 特殊处理英语科目
+                    if (subjectPrefix === '英语科目' || subjectPrefix === '英语') {
+                        defaultPdfName = '大学英语';
+                    }
+                    
+                    const row = document.createElement('div');
+                    row.className = 'subject-config-item';
+                    
+                    // 现代化卡片式同行布局
+                    row.style.cssText = 'display: grid; grid-template-columns: 1.2fr 2fr 2fr; gap: 16px; align-items: center; background: var(--bg-secondary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border); transition: all 0.2s;';
+                    row.onmouseover = () => row.style.borderColor = 'var(--primary-light)';
+                    row.onmouseout = () => row.style.borderColor = 'var(--border)';
+                    
+                    row.innerHTML = `
+                        <div style="font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--primary); font-size: 16px;">📘</span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${subjectPrefix}">${subjectPrefix}</span>
+                            <input type="hidden" class="conf-excel-prefix" value="${subjectPrefix}">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">印在 PDF 上的科目名称</label>
+                            <input type="text" class="file-input conf-pdf-name" style="margin: 0; width: 100%;" value="${defaultPdfName}">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">选择考试时间段</label>
+                            <div class="input-group" style="gap: 8px;">
+                                <select class="conf-time-start" style="flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 14px; color: var(--text); background: var(--bg-primary); transition: border-color 0.3s; cursor: pointer;">
+                                    ${timeOptions}
+                                </select>
+                                <span style="color: var(--text-muted); font-weight: bold; line-height: 38px;">-</span>
+                                <select class="conf-time-end" style="flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 14px; color: var(--text); background: var(--bg-primary); transition: border-color 0.3s; cursor: pointer;">
+                                    ${timeOptions}
+                                </select>
+                            </div>
+                        </div>
+                    `;
+                    subjectList.appendChild(row);
+                });
+            } else {
+                subjectCard.style.display = 'none';
+            }
+        });
+
+        function startTicketAudit() {
+            if (!auditPdfDir) {
+                showToast('请选择包含 PDF 准考证的文件夹', 'error');
+                return;
+            }
+            if (!auditExcelFile) {
+                showToast('请选择考生信息 Excel 表格', 'error');
+                return;
+            }
+            
+            // 收集科目配置
+            const subjectConfigs = [];
+            const configItems = document.querySelectorAll('.subject-config-item');
+            configItems.forEach(item => {
+                const excelPrefix = item.querySelector('.conf-excel-prefix').value;
+                const pdfName = item.querySelector('.conf-pdf-name').value.trim();
+                const timeStart = item.querySelector('.conf-time-start').value;
+                const timeEnd = item.querySelector('.conf-time-end').value;
+                
+                // 如果只填了一半时间，或者没填，可以处理为一个完整的字符串或者留空
+                const time = (timeStart && timeEnd) ? `${timeStart}-${timeEnd}` : '';
+                
+                if (pdfName) {
+                    subjectConfigs.push({ excelPrefix, pdfName, time });
+                }
+            });
+            
+            const btn = document.getElementById('start-audit-btn');
+            btn.disabled = true;
+            btn.innerText = '正在审核...';
+            
+            document.getElementById('audit-result-card').style.display = 'block';
+            document.getElementById('audit-result-body').innerHTML = '';
+            document.getElementById('audit-summary').innerText = '正在初始化...';
+            document.getElementById('audit-progress-fill').style.width = '0%';
+            document.getElementById('audit-progress-text').innerText = '0%';
+            
+            ipcRenderer.send('start-ticket-audit', {
+                pdfDir: auditPdfDir,
+                excelPath: auditExcelFile,
+                subjectConfigs: subjectConfigs
+            });
+        }
+
+        function openAuditPdf(filePath) {
+            ipcRenderer.send('open-pdf-file', filePath);
+        }
+
+        ipcRenderer.on('audit-progress', (event, data) => {
+            // 计算更精细的进度（基于文件进度 + 当前文件的页数进度）
+            const fileBase = data.pFiles / data.tFiles;
+            const pageFraction = data.tPages > 0 ? (data.pPages / data.tPages) * (1 / data.tFiles) : 0;
+            const percent = Math.min(100, Math.floor((fileBase + pageFraction) * 100));
+            
+            document.getElementById('audit-progress-fill').style.width = percent + '%';
+            document.getElementById('audit-progress-text').innerText = `${percent}% - 正在处理: ${data.currentFile} (第 ${data.pPages}/${data.tPages} 页)`;
+        });
+
+        ipcRenderer.on('audit-success', (event, results) => {
+            const btn = document.getElementById('start-audit-btn');
+            btn.disabled = false;
+            btn.innerText = '开始智能审核';
+            
+            // 修正完成时的进度条文本显示
+            document.getElementById('audit-progress-fill').style.width = '100%';
+            document.getElementById('audit-progress-text').innerText = '100% - 处理完毕';
+            
+            const tbody = document.getElementById('audit-result-body');
+            tbody.innerHTML = '';
+            
+            let errorCount = 0;
+            
+            results.forEach(result => {
+                if (result.status === 'error') {
+                    errorCount++;
+                }
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border)';
+                // 确保表格行高度自适应并且内容顶部对齐
+                tr.style.verticalAlign = 'top';
+                
+                const statusHtml = result.status === 'success' 
+                    ? '<span style="color: #10b981; font-weight: bold; white-space: nowrap;">✅ 通过</span>' 
+                    : '<span style="color: #ef4444; font-weight: bold; white-space: nowrap;">❌ 异常</span>';
+                    
+                const fileHtml = `<a href="javascript:void(0)" onclick="openAuditPdf('${result.filePath.replace(/\\/g, '\\\\')}')" style="color: var(--primary); text-decoration: underline; cursor: pointer; display: inline-block; word-break: break-all;">${result.fileName} <br><span style="font-size:12px; color: var(--text-muted);">(第${result.pageNum}页)</span></a>`;
+                
+                tr.className = `audit-row audit-${result.status}`;
+                tr.innerHTML = `
+                    <td style="padding: 10px; text-align: center;">${statusHtml}</td>
+                    <td style="padding: 10px; font-size: 13px; text-align: center;">${result.ticketNo}</td>
+                    <td style="padding: 10px; font-size: 14px; text-align: center; word-break: break-all; white-space: normal;">${result.name}</td>
+                    <td style="padding: 10px; font-size: 13px; text-align: left; word-break: break-all;">${fileHtml}</td>
+                    <td style="padding: 10px; font-size: 13px; color: ${result.status === 'error' ? '#ef4444' : 'var(--text)'}; line-height: 1.6; word-wrap: break-word; text-align: left;">${result.reason}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('audit-summary').innerHTML = `审核完成。共检测准考证记录: ${results.length} 条，其中 <span style="color: #10b981;">正常: ${results.length - errorCount}</span>，<span style="color: #ef4444;">异常: ${errorCount}</span>。`;
+            document.getElementById('audit-filter-container').style.display = 'flex';
+            showToast('审核完成', 'success');
+        });
+
+        function filterAuditResults() {
+            const status = document.getElementById('audit-status-filter').value;
+            const searchKeyword = document.getElementById('audit-search-input').value.toLowerCase().trim();
+            
+            const rows = document.querySelectorAll('.audit-row');
+            rows.forEach(row => {
+                let showByStatus = status === 'all' || row.classList.contains(`audit-${status}`);
+                let showBySearch = true;
+                
+                if (searchKeyword) {
+                    // 只需在准考证号、姓名和报错原因里搜索
+                    const textContent = row.innerText.toLowerCase();
+                    showBySearch = textContent.includes(searchKeyword);
+                }
+                
+                row.style.display = (showByStatus && showBySearch) ? '' : 'none';
+            });
+        }
+
+        ipcRenderer.on('audit-error', (event, message) => {
+            const btn = document.getElementById('start-audit-btn');
+            btn.disabled = false;
+            btn.innerText = '开始审核';
+            showToast('审核出错: ' + message, 'error');
         });
 
         function startConversion() {
@@ -2601,6 +2951,10 @@
         function downloadTemplate() {
             ipcRenderer.send('download-template');
         }
+        
+        function downloadAuditTemplate() {
+            ipcRenderer.send('download-audit-template');
+        }
 
         ipcRenderer.on('template-downloaded', (event, result) => {
             const status = document.getElementById('status');
@@ -2610,6 +2964,14 @@
             } else {
                 status.className = 'status error';
                 status.innerText = result.message === '已取消' ? '已取消保存' : `保存失败: ${result.message}`;
+            }
+        });
+
+        ipcRenderer.on('audit-template-downloaded', (event, result) => {
+            if (result.success) {
+                showToast('模板已保存至: ' + result.path, 'success');
+            } else if (result.message !== '已取消') {
+                showToast(`保存失败: ${result.message}`, 'error');
             }
         });
 
