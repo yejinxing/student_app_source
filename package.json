@@ -6,7 +6,10 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "test": "echo \"No tests configured\""
+    "test": "node --test --test-concurrency=1 \"tests/unit/**/*.test.js\" \"tests/integration/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-concurrency=1 \"tests/unit/**/*.test.js\" \"tests/integration/**/*.test.js\"",
+    "test:smoke": "node tests/smoke/electron.smoke.test.js",
+    "verify:package": "node scripts/verify-package.js"
   },
   "build": {
     "appId": "com.student.app",
@@ -15,10 +18,18 @@
     "files": [
       "main.js",
       "index.html",
-      "icon.png",
       "src/**/*",
-      "assets/**/*",
-      "node_modules/**/*"
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/pdfjs-dist/cmaps/**/*",
+      "node_modules/pdfjs-dist/standard_fonts/**/*"
     ],
     "win": {
       "target": [
@@ -109,15 +120,19 @@
     "url": "https://github.com/yejinxing/student_app_source.git"
   },
   "devDependencies": {
+    "@electron/asar": "^4.3.2",
     "electron": "^39.2.7",
-    "electron-builder": "^26.4.0"
+    "electron-builder": "^26.4.0",
+    "playwright-core": "^1.65.1"
   },
   "dependencies": {
     "axios": "^1.13.2",
     "docx": "^9.5.1",
+    "dompurify": "^3.4.18",
     "electron-updater": "^6.7.3",
     "fs-extra": "^11.3.3",
     "js-yaml": "^4.1.1",
+    "marked": "^18.2.1",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^2.16.105",
     "sharp": "^0.34.5",

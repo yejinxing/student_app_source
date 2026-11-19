@@ -1,4 +1,3 @@
-const converter = require('./converter');
 const fs = require('fs-extra');
 const path = require('path');
 

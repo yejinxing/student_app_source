@@ -1,9 +1,9 @@
-const { convertExcelToWord } = require('../src/converter');
+const { convertExcelToWord } = require('../../src/converter');
 const path = require('path');
 
 async function test() {
-    const excelPath = path.join(__dirname, 'test_students.xlsx');
-    const outputPath = path.join(__dirname, 'test_output.docx');
+    const excelPath = path.join(__dirname, '..', 'fixtures', 'test_students.xlsx');
+    const outputPath = path.join(__dirname, '..', 'tmp', 'test_output.docx');
     
     console.log('开始转换...');
     try {

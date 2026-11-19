@@ -3,7 +3,7 @@ const xlsx = require('xlsx');
 const path = require('path');
 
 // 读取 Excel 文件
-const excelPath = path.join(__dirname, 'test_students.xlsx');
+const excelPath = path.join(__dirname, '..', 'fixtures', 'test_students.xlsx');
 const workbook = xlsx.readFile(excelPath);
 const sheetName = workbook.SheetNames[0];
 const worksheet = workbook.Sheets[sheetName];

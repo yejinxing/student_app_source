@@ -30,12 +30,11 @@ npm-debug.log*
 *.sln
 *.sw?
 
-# 测试文件
-test*.xlsx
+# 测试产物（测试源码与 fixture 需要被跟踪）
+tests/tmp/
+tests/output/
+tests/test_output.docx
 temp_test/
-*.test.js
-*.doc
-*.docx
 
 # 系统文件
 .DS_Store

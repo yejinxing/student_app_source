@@ -32,5 +32,6 @@ data = [
 ]
 
 df = pd.DataFrame(data)
-df.to_excel("/home/ubuntu/student_app/test_students.xlsx", index=False)
-print("测试 Excel 文件已生成：/home/ubuntu/student_app/test_students.xlsx")
+output_path = os.path.join(os.path.dirname(__file__), "..", "fixtures", "test_students.xlsx")
+df.to_excel(output_path, index=False)
+print(f"测试 Excel 文件已生成：{output_path}")

@@ -960,4 +960,13 @@ async function convertExcelToWord(excelPath, outputPath) {
     await fs.writeFile(outputPath, buffer);
 }
 
-module.exports = { convertExcelToWord };
+module.exports = {
+    convertExcelToWord,
+    cmToTwip,
+    extractYearFromClassName,
+    getYearFromClasses,
+    getLevel,
+    getDeptIndex,
+    DEPT_ORDER,
+    calculateStatistics
+};
