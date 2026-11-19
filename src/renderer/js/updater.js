@@ -52,11 +52,11 @@
         }
         
         // 更新状态监听
-        ipcRenderer.on('update-checking', () => {
+        onIpc('update-checking', () => {
             showUpdateState('checking');
         });
         
-        ipcRenderer.on('update-available', (event, info) => {
+        onIpc('update-available', (event, info) => {
             updateInfo = info;
             document.getElementById('update-old-ver').textContent = 'v' + info.currentVersion;
             document.getElementById('update-new-ver').textContent = 'v' + info.version;
@@ -96,12 +96,12 @@
             showUpdateState('available');
         });
         
-        ipcRenderer.on('update-not-available', (event, info) => {
+        onIpc('update-not-available', (event, info) => {
             document.getElementById('update-current-version').textContent = 'v' + info.currentVersion;
             showUpdateState('latest');
         });
         
-        ipcRenderer.on('update-downloading', (event, data) => {
+        onIpc('update-downloading', (event, data) => {
             showUpdateState('downloading');
             
             // 显示镜像信息（如果提供）
@@ -116,7 +116,7 @@
             }
         });
         
-        ipcRenderer.on('update-progress', (event, progress) => {
+        onIpc('update-progress', (event, progress) => {
             const percent = Number(progress && progress.percent);
             const safePercent = Number.isFinite(percent) ? percent : 0;
             document.getElementById('update-progress-fill').style.width = safePercent + '%';
@@ -166,7 +166,7 @@
         });
         
         // 处理镜像切换重试事件
-        ipcRenderer.on('update-retrying', (event, data) => {
+        onIpc('update-retrying', (event, data) => {
             const mirrorEl = document.getElementById('update-mirror-info');
             if (mirrorEl && data && data.mirror) {
                 mirrorEl.style.display = 'block';
@@ -174,12 +174,12 @@
             }
         });
         
-        ipcRenderer.on('update-downloaded', (event, info) => {
+        onIpc('update-downloaded', (event, info) => {
             showUpdateState('downloaded');
             console.log('下载完成:', info);
         });
         
-        ipcRenderer.on('update-installing', (event, progress) => {
+        onIpc('update-installing', (event, progress) => {
             showUpdateState('installing');
             if (progress) {
                 const percent = Number(progress.percent);
@@ -193,18 +193,18 @@
             console.log('安装进度:', progress);
         });
         
-        ipcRenderer.on('update-install-complete', () => {
+        onIpc('update-install-complete', () => {
             showUpdateState('install-complete');
             console.log('安装完成');
         });
         
-        ipcRenderer.on('update-error', (event, error) => {
+        onIpc('update-error', (event, error) => {
             document.getElementById('update-error-msg').textContent = error || '检查更新失败，请稍后重试';
             showUpdateState('error');
         });
         
         // 更新完成通知（应用重启后显示）
-        ipcRenderer.on('update-completed-notification', (event, info) => {
+        onIpc('update-completed-notification', (event, info) => {
             console.log('收到更新完成通知:', info);
             
             // 显示更新成功提示
@@ -295,7 +295,7 @@
         }
         
         // 静默检查发现更新时的处理
-        ipcRenderer.on('update-available-silent', (event, info) => {
+        onIpc('update-available-silent', (event, info) => {
             console.log('静默检查发现新版本:', info.version);
             // 存储更新信息
             updateInfo = info;
@@ -315,7 +315,7 @@
                         <div class="update-toast-title">发现新版本 v${escapeHtml(info.version)}</div>
                         <div class="update-toast-desc">点击查看更新内容</div>
                     </div>
-                    <button class="update-toast-close" onclick="this.parentElement.parentElement.remove()">×</button>
+                    <button class="update-toast-close">×</button>
                 </div>
             `;
             toast.style.cssText = `
@@ -387,6 +387,11 @@
                 }
             });
             
+            toast.querySelector('.update-toast-close').addEventListener('click', (clickEvent) => {
+                clickEvent.stopPropagation();
+                toast.remove();
+            });
+
             document.body.appendChild(toast);
             
             // 10 秒后自动消失

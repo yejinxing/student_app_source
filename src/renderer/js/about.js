@@ -15,6 +15,7 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeAboutModal();
+                closeUpdateModal();
             }
         });
 
@@ -22,7 +23,7 @@
             ipcRenderer.send('get-app-info');
         }
         
-        ipcRenderer.on('app-info', (event, info) => {
+        onIpc('app-info', (event, info) => {
             document.getElementById('app-version').textContent = `v${info.version}`;
             document.getElementById('electron-version').textContent = info.electronVersion;
             document.getElementById('install-path').textContent = info.installPath;

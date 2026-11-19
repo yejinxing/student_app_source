@@ -17,7 +17,7 @@
             ipcRenderer.send('start-conversion', { excelPath: selectedPath });
         }
 
-        ipcRenderer.on('conversion-success', (event, outputPath) => {
+        onIpc('conversion-success', (event, outputPath) => {
             const status = document.getElementById('status');
             status.className = 'status success';
             status.textContent = '转换成功！文件已保存至: ';
@@ -34,7 +34,7 @@
             document.getElementById('convert-btn').innerText = '开始转换';
         });
 
-        ipcRenderer.on('conversion-error', (event, message) => {
+        onIpc('conversion-error', (event, message) => {
             const status = document.getElementById('status');
             status.className = 'status error';
             status.innerText = `转换失败: ${message}`;
@@ -50,7 +50,7 @@
             ipcRenderer.send('download-audit-template');
         }
 
-        ipcRenderer.on('template-downloaded', (event, result) => {
+        onIpc('template-downloaded', (event, result) => {
             const status = document.getElementById('status');
             if (result.success) {
                 status.className = 'status success';
@@ -70,7 +70,7 @@
             }
         });
 
-        ipcRenderer.on('audit-template-downloaded', (event, result) => {
+        onIpc('audit-template-downloaded', (event, result) => {
             if (result.success) {
                 showToast('模板已保存至: ' + result.path, 'success');
             } else if (result.message !== '已取消') {

@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'">
     <title>学生信息处理工具</title>
     <!-- 本地 Markdown 渲染与净化库 -->
     <script src="node_modules/marked/lib/marked.umd.js"></script>
@@ -20,14 +20,14 @@
     <!-- 左侧边栏 -->
     <aside class="sidebar" id="sidebar">
         <!-- 横跨边界的切换按钮 -->
-        <button class="sidebar-toggle" onclick="toggleSidebar()" title="展开/收起">
+        <button class="sidebar-toggle" data-action="toggle-sidebar" title="展开/收起">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="9 18 15 12 9 6"/>
             </svg>
         </button>
         
         <nav class="sidebar-nav">
-            <div class="nav-item active" onclick="showPage('home')" title="主页">
+            <div class="nav-item active" data-action="show-page" data-page="home" title="主页">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -36,7 +36,7 @@
                 </span>
                 <span class="nav-label">主页</span>
         </div>
-            <div class="nav-item" onclick="showPage('convert')" title="文档转换">
+            <div class="nav-item" data-action="show-page" data-page="convert" title="文档转换">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -48,7 +48,7 @@
                 </span>
                 <span class="nav-label">文档转换</span>
             </div>
-            <div class="nav-item" onclick="showPage('ticket-audit')" title="准考证审核">
+            <div class="nav-item" data-action="show-page" data-page="ticket-audit" title="准考证审核">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -58,7 +58,7 @@
                 </span>
                 <span class="nav-label">准考证审核</span>
             </div>
-            <div class="nav-item" onclick="showPage('photo-rename')" title="照片重命名">
+            <div class="nav-item" data-action="show-page" data-page="photo-rename" title="照片重命名">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -71,7 +71,7 @@
         </nav>
         
         <div class="sidebar-footer">
-            <div class="nav-item" onclick="showPage('settings')" title="系统设置">
+            <div class="nav-item" data-action="show-page" data-page="settings" title="系统设置">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"/>
@@ -80,7 +80,7 @@
                 </span>
                 <span class="nav-label">设置</span>
             </div>
-            <div class="nav-item" onclick="openAboutModal()" title="关于">
+            <div class="nav-item" data-action="open-about" title="关于">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"/>
@@ -94,9 +94,9 @@
     </aside>
     
     <!-- 关于弹窗 -->
-    <div class="modal-overlay" id="about-modal" onclick="closeAboutModal(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <button class="modal-close" onclick="closeAboutModal()">&times;</button>
+    <div class="modal-overlay" id="about-modal" data-action="close-about-overlay">
+        <div class="modal-content" >
+            <button class="modal-close" data-action="close-about">&times;</button>
             
             <div class="about-header">
                 <img src="assets/icon.png" alt="应用图标" class="about-icon">
@@ -105,7 +105,7 @@
             </div>
             
             <div style="text-align: center;">
-                <button class="about-update-btn" onclick="checkUpdate()">
+                <button class="about-update-btn" data-action="check-update">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="23 4 23 10 17 10"/>
                         <polyline points="1 20 1 14 7 14"/>
@@ -145,7 +145,7 @@
                 </div>
                 <div class="about-dev-item">
                     <span class="about-dev-label">GitHub</span>
-                    <a href="#" class="about-dev-link" onclick="openGitHub()">github.com/yejinxing</a>
+                    <a href="#" class="about-dev-link" data-action="open-github">github.com/yejinxing</a>
                 </div>
                 <div class="about-dev-item">
                     <span class="about-dev-label">邮箱</span>
@@ -181,9 +181,9 @@
     </div>
     
     <!-- 更新弹窗 -->
-    <div class="modal-overlay" id="update-modal" onclick="closeUpdateModal(event)">
-        <div class="modal-content update-modal-content" onclick="event.stopPropagation()">
-            <button class="modal-close" onclick="closeUpdateModal()">&times;</button>
+    <div class="modal-overlay" id="update-modal" data-action="close-update-overlay">
+        <div class="modal-content update-modal-content" >
+            <button class="modal-close" data-action="close-update">&times;</button>
             
             <!-- 检查中状态 -->
             <div class="update-state" id="update-checking">
@@ -201,7 +201,7 @@
                 </div>
                 <h3 class="update-title">已是最新版本</h3>
                 <p class="update-desc">当前版本：<span id="update-current-version">v1.0.0</span></p>
-                <button class="update-btn update-btn-secondary" onclick="closeUpdateModal()">关闭</button>
+                <button class="update-btn update-btn-secondary" data-action="close-update">关闭</button>
             </div>
             
             <!-- 发现新版本 -->
@@ -231,8 +231,8 @@
                     </div>
                 </div>
                 <div class="update-actions">
-                    <button class="update-btn update-btn-secondary" onclick="closeUpdateModal()">稍后更新</button>
-                    <button class="update-btn update-btn-primary" onclick="startDownload()">
+                    <button class="update-btn update-btn-secondary" data-action="close-update">稍后更新</button>
+                    <button class="update-btn update-btn-primary" data-action="start-download">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:4px;">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                             <polyline points="7 10 12 15 17 10"/>
@@ -242,7 +242,7 @@
                     </button>
                 </div>
                 <p class="update-hint" style="margin-top: 12px;">
-                    或访问 <a href="#" onclick="openReleasePage()" style="color: var(--primary);">发布页面</a> 手动下载
+                    或访问 <a href="#" data-action="open-release-page" style="color: var(--primary);">发布页面</a> 手动下载
                 </p>
             </div>
             
@@ -272,7 +272,7 @@
                     </div>
                 </div>
                 <p class="update-hint">下载完成后将自动提示安装</p>
-                <button class="update-btn update-btn-secondary" onclick="cancelDownload()" style="margin-top: 12px;">取消下载</button>
+                <button class="update-btn update-btn-secondary" data-action="cancel-download" style="margin-top: 12px;">取消下载</button>
             </div>
             
             <!-- 下载完成 -->
@@ -286,8 +286,8 @@
                 <h3 class="update-title">下载完成</h3>
                 <p class="update-desc">新版本已下载完成，是否立即安装？</p>
                 <div class="update-actions">
-                    <button class="update-btn update-btn-secondary" onclick="closeUpdateModal()">稍后安装</button>
-                    <button class="update-btn update-btn-primary" onclick="installUpdate()">立即安装</button>
+                    <button class="update-btn update-btn-secondary" data-action="close-update">稍后安装</button>
+                    <button class="update-btn update-btn-primary" data-action="install-update">立即安装</button>
                 </div>
             </div>
             
@@ -335,8 +335,8 @@
                 <h3 class="update-title">检查失败</h3>
                 <p class="update-desc" id="update-error-msg">网络连接失败，请检查网络后重试</p>
                 <div class="update-actions">
-                    <button class="update-btn update-btn-secondary" onclick="closeUpdateModal()">关闭</button>
-                    <button class="update-btn update-btn-primary" onclick="checkUpdate()">重试</button>
+                    <button class="update-btn update-btn-secondary" data-action="close-update">关闭</button>
+                    <button class="update-btn update-btn-primary" data-action="check-update">重试</button>
                 </div>
             </div>
         </div>
@@ -363,7 +363,7 @@
             
             <!-- 功能快捷入口 -->
             <div class="quick-actions">
-                <div class="quick-action-card" onclick="showPageByName('convert')">
+                <div class="quick-action-card" data-action="show-page-by-name" data-page="convert">
                     <div class="quick-action-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -379,7 +379,7 @@
                     <span class="quick-action-arrow">→</span>
                 </div>
                 
-                <div class="quick-action-card" onclick="showPageByName('ticket-audit')">
+                <div class="quick-action-card" data-action="show-page-by-name" data-page="ticket-audit">
                     <div class="quick-action-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -394,7 +394,7 @@
                     <span class="quick-action-arrow">→</span>
                 </div>
                 
-                <div class="quick-action-card" onclick="showPageByName('photo-rename')">
+                <div class="quick-action-card" data-action="show-page-by-name" data-page="photo-rename">
                     <div class="quick-action-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -409,7 +409,7 @@
                     <span class="quick-action-arrow">→</span>
                 </div>
                 
-                <div class="quick-action-card" onclick="showPageByName('settings')">
+                <div class="quick-action-card" data-action="show-page-by-name" data-page="settings">
                     <div class="quick-action-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="3"/>
@@ -462,9 +462,9 @@
                     选择包含学生信息的 Excel 文件，系统将按照预定格式自动生成 Word 文档。
                 </p>
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn" onclick="selectFile()">选择 Excel 文件</button>
-                    <button id="convert-btn" class="btn btn-secondary" onclick="startConversion()" disabled>开始转换</button>
-                    <button class="btn btn-outline" onclick="downloadTemplate()">下载模板</button>
+                    <button class="btn" data-action="select-file">选择 Excel 文件</button>
+                    <button id="convert-btn" class="btn btn-secondary" data-action="start-conversion" disabled>开始转换</button>
+                    <button class="btn btn-outline" data-action="download-template">下载模板</button>
                 </div>
             <div id="file-path">未选择文件</div>
             <div id="status" class="status"></div>
@@ -483,7 +483,7 @@
                     <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--primary);">
                         <span style="display: inline-block; width: 24px; height: 24px; background: var(--primary); color: white; border-radius: 50%; text-align: center; line-height: 24px; margin-right: 8px;">1</span>导入数据源
                     </h3>
-                    <button class="btn btn-outline btn-sm" onclick="downloadAuditTemplate()">下载模板</button>
+                    <button class="btn btn-outline btn-sm" data-action="download-audit-template">下载模板</button>
                 </div>
                 
                 <div class="form-grid">
@@ -491,7 +491,7 @@
                         <label class="form-label">PDF 准考证文件夹</label>
                         <div class="input-group">
                             <input type="text" id="audit-pdf-dir" readonly placeholder="选择包含 PDF 的目录...">
-                            <button class="btn btn-secondary" onclick="selectAuditPdfDir()">浏览</button>
+                            <button class="btn btn-secondary" data-action="select-audit-pdf-dir">浏览</button>
                         </div>
                     </div>
 
@@ -499,7 +499,7 @@
                         <label class="form-label">考生信息 Excel</label>
                         <div class="input-group">
                             <input type="text" id="audit-excel-file" readonly placeholder="选择含排考数据的 Excel...">
-                            <button class="btn btn-secondary" onclick="selectAuditExcel()">浏览</button>
+                            <button class="btn btn-secondary" data-action="select-audit-excel">浏览</button>
                         </div>
                     </div>
                 </div>
@@ -511,7 +511,7 @@
                     <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--primary);">
                         <span style="display: inline-block; width: 24px; height: 24px; background: var(--primary); color: white; border-radius: 50%; text-align: center; line-height: 24px; margin-right: 8px;">2</span>配置科目与时间
                     </h3>
-                    <button class="btn btn-primary" id="start-audit-btn" onclick="startTicketAudit()" style="padding: 8px 24px; font-size: 14px; box-shadow: var(--shadow-sm);">开始智能审核</button>
+                    <button class="btn btn-primary" id="start-audit-btn" data-action="start-ticket-audit" style="padding: 8px 24px; font-size: 14px; box-shadow: var(--shadow-sm);">开始智能审核</button>
                 </div>
                 <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">已自动读取 Excel 考场列，请核对 PDF 上的显示名称，并点选考试时间：</p>
                 
@@ -534,9 +534,9 @@
                     <div id="audit-summary" style="font-weight: bold; font-size: 16px;"></div>
                     <div id="audit-filter-container" style="display: none; align-items: center; gap: 12px;">
                         <div class="input-group" style="width: 200px;">
-                            <input type="text" id="audit-search-input" placeholder="搜索姓名/准考证号..." oninput="filterAuditResults()" style="padding: 6px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; background: var(--bg-primary); color: var(--text);">
+                            <input type="text" id="audit-search-input" placeholder="搜索姓名/准考证号..."  style="padding: 6px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; background: var(--bg-primary); color: var(--text);">
                         </div>
-                        <select id="audit-status-filter" onchange="filterAuditResults()" style="padding: 6px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text); cursor: pointer;">
+                        <select id="audit-status-filter"  style="padding: 6px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text); cursor: pointer;">
                             <option value="all">全部状态</option>
                             <option value="success">✅ 仅看通过</option>
                             <option value="error">❌ 仅看异常</option>
@@ -572,7 +572,7 @@
                         <label class="form-label">Excel 文件</label>
                         <div class="input-group">
                             <input type="text" id="photo-excel-path" readonly placeholder="选择包含字段映射的 Excel 文件">
-                            <button class="btn btn-secondary" onclick="selectPhotoExcelFile()">浏览</button>
+                            <button class="btn btn-secondary" data-action="select-photo-excel-file">浏览</button>
                         </div>
             </div>
             
@@ -590,7 +590,7 @@
                         <label class="form-label">原始图片目录</label>
                         <div class="input-group">
                             <input type="text" id="photo-folder-path" readonly placeholder="选择包含照片的文件夹">
-                            <button class="btn btn-secondary" onclick="selectPhotoFolder()">浏览</button>
+                            <button class="btn btn-secondary" data-action="select-photo-folder">浏览</button>
                         </div>
             </div>
             
@@ -598,7 +598,7 @@
                         <label class="form-label">输出目录</label>
                         <div class="input-group">
                             <input type="text" id="photo-output-path" readonly placeholder="选择输出文件夹">
-                            <button class="btn btn-secondary" onclick="selectPhotoOutputFolder()">浏览</button>
+                            <button class="btn btn-secondary" data-action="select-photo-output-folder">浏览</button>
                         </div>
             </div>
             
@@ -617,8 +617,8 @@
             </div>
             
                 <div class="form-actions">
-                    <button id="photo-rename-btn" class="btn" onclick="startPhotoRenaming()" disabled>开始处理</button>
-                    <button id="stop-rename-btn" class="btn btn-danger" onclick="stopPhotoRenaming()" disabled>停止</button>
+                    <button id="photo-rename-btn" class="btn" data-action="start-photo-renaming" disabled>开始处理</button>
+                    <button id="stop-rename-btn" class="btn btn-danger" data-action="stop-photo-renaming" disabled>停止</button>
             </div>
             
                 <div class="progress-section">
@@ -730,7 +730,7 @@
                         <span class="settings-item-title">默认输出目录</span>
                         <span class="settings-item-desc" id="default-output-dir-display">与源文件相同目录</span>
                     </div>
-                    <button class="btn btn-secondary" onclick="selectDefaultOutputDir()">选择目录</button>
+                    <button class="btn btn-secondary" data-action="select-default-output-dir">选择目录</button>
                 </div>
                 <div class="settings-item">
                     <div class="settings-item-info">
@@ -765,28 +765,28 @@
                         <span class="settings-item-title">缓存大小</span>
                         <span class="settings-item-desc">当前缓存占用: <span id="cache-size">计算中...</span></span>
                     </div>
-                    <button class="btn btn-secondary" onclick="clearCache()">清理缓存</button>
+                    <button class="btn btn-secondary" data-action="clear-cache">清理缓存</button>
                 </div>
                 <div class="settings-item">
                     <div class="settings-item-info">
                         <span class="settings-item-title">导出设置</span>
                         <span class="settings-item-desc">将当前设置导出为配置文件</span>
                     </div>
-                    <button class="btn btn-secondary" onclick="exportSettings()">导出</button>
+                    <button class="btn btn-secondary" data-action="export-settings">导出</button>
                 </div>
                 <div class="settings-item">
                     <div class="settings-item-info">
                         <span class="settings-item-title">导入设置</span>
                         <span class="settings-item-desc">从配置文件导入设置</span>
                     </div>
-                    <button class="btn btn-secondary" onclick="importSettings()">导入</button>
+                    <button class="btn btn-secondary" data-action="import-settings">导入</button>
                 </div>
                 <div class="settings-item">
                     <div class="settings-item-info">
                         <span class="settings-item-title">重置所有设置</span>
                         <span class="settings-item-desc">将所有设置恢复为默认值</span>
                     </div>
-                    <button class="btn btn-danger" onclick="resetSettings()">重置</button>
+                    <button class="btn btn-danger" data-action="reset-settings">重置</button>
                 </div>
             </div>
             
@@ -815,21 +815,21 @@
                         <span class="settings-item-title">安装目录</span>
                         <span class="settings-item-desc" id="install-path">加载中...</span>
                     </div>
-                    <button class="btn btn-secondary" onclick="openInstallDir()">打开</button>
+                    <button class="btn btn-secondary" data-action="open-install-dir">打开</button>
                 </div>
                 <div class="settings-item">
                     <div class="settings-item-info">
                         <span class="settings-item-title">检查更新</span>
                         <span class="settings-item-desc">检查是否有新版本可用</span>
                     </div>
-                    <button class="btn btn-secondary" onclick="checkUpdate()">检查更新</button>
+                    <button class="btn btn-secondary" data-action="check-update">检查更新</button>
                 </div>
                 <div class="settings-item">
                     <div class="settings-item-info">
                         <span class="settings-item-title">开源许可</span>
                         <span class="settings-item-desc">查看第三方开源组件许可证</span>
                     </div>
-                    <button class="btn btn-secondary" onclick="showLicenses()">查看</button>
+                    <button class="btn btn-secondary" data-action="show-licenses">查看</button>
                 </div>
             </div>
             </div>
@@ -852,7 +852,7 @@
                         <span class="settings-item-title">GitHub</span>
                         <span class="settings-item-desc">开源代码仓库</span>
                     </div>
-                    <button class="btn btn-secondary" onclick="openGitHub()">访问 GitHub</button>
+                    <button class="btn btn-secondary" data-action="open-github">访问 GitHub</button>
                 </div>
                 <div class="settings-item">
                     <div class="settings-item-info">

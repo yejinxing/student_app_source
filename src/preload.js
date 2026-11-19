@@ -36,6 +36,7 @@ const INVOKE_CHANNELS = new Set([
     'select-file',
     'select-pdf-dir',
     'get-excel-columns',
+    'detect-exam-schedule',
     'open-file'
 ]);
 
@@ -106,6 +107,12 @@ function removeListener(channel, listener) {
     }
 }
 
+function removeAllListeners(channel) {
+    assertAllowed(RECEIVE_CHANNELS, channel, '接收');
+    ipcRenderer.removeAllListeners(channel);
+    listenerMap.clear();
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
     platform: process.platform,
     send(channel, ...args) {
@@ -119,6 +126,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     on,
     once,
     removeListener,
+    removeAllListeners,
     openPath(filePath) {
         return ipcRenderer.invoke('open-file', filePath);
     },

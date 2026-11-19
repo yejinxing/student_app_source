@@ -3,6 +3,7 @@ const fs = require('fs-extra');
 const { ipcMain, dialog, shell, app } = require('electron');
 const { getMainWindow } = require('../window');
 const { rootPath } = require('../paths');
+const { isAllowedExternalUrl } = require('../urlPolicy');
 
 function registerMiscIpc() {
     ipcMain.on('open-install-dir', (event) => {
@@ -49,15 +50,19 @@ function registerMiscIpc() {
             const resolved = path.resolve(String(filePath));
             if (!fs.existsSync(resolved)) return false;
 
+            const realPath = fs.realpathSync(resolved);
+            const stat = fs.statSync(realPath);
+            if (!stat.isFile()) return false;
+
             const allowedExtensions = new Set([
                 '.docx', '.xlsx', '.xls', '.pdf', '.json', '.txt',
                 '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'
             ]);
-            if (!allowedExtensions.has(path.extname(resolved).toLowerCase())) {
+            if (!allowedExtensions.has(path.extname(realPath).toLowerCase())) {
                 return false;
             }
 
-            const error = await shell.openPath(resolved);
+            const error = await shell.openPath(realPath);
             return error === '';
         } catch (e) {
             console.error('打开文件失败:', e);
@@ -66,15 +71,11 @@ function registerMiscIpc() {
     });
 
     ipcMain.on('open-external-url', (event, url) => {
-        try {
-            const parsed = new URL(String(url));
-            if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-                return;
-            }
-            shell.openExternal(parsed.toString());
-        } catch (e) {
-            console.warn('忽略无效的外部链接:', url);
+        if (!isAllowedExternalUrl(url)) {
+            console.warn('忽略不在白名单中的外部链接:', url);
+            return;
         }
+        shell.openExternal(String(url));
     });
 }
 

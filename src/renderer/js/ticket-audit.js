@@ -7,6 +7,7 @@
                 if (path) {
                     auditPdfDir = path;
                     document.getElementById('audit-pdf-dir').value = path;
+                    autoFillExamSchedule();
                 }
             }).catch((error) => {
                 showToast(`选择 PDF 文件夹失败: ${error.message}`, 'error');
@@ -22,6 +23,7 @@
 
             const columns = await ipcRenderer.invoke('get-excel-columns', filePath);
             renderSubjectConfig(columns);
+            autoFillExamSchedule();
         }
 
         function generateTimeOptions() {
@@ -33,6 +35,108 @@
                 }
             }
             return options;
+        }
+
+        function getDefaultPdfName(subjectPrefix) {
+            let defaultPdfName = subjectPrefix.replace('科目', '').replace('1', '一').replace('2', '二').replace('3', '三');
+            if (subjectPrefix === '英语科目' || subjectPrefix === '英语') {
+                defaultPdfName = '大学英语';
+            }
+            return defaultPdfName;
+        }
+
+        function normalizeSubjectName(name) {
+            return String(name || '').replace(/\s+/g, '').replace(/科目/g, '');
+        }
+
+        function findDetectedSubject(defaultPdfName, currentPdfName, subjects) {
+            const candidates = [defaultPdfName, currentPdfName]
+                .map(normalizeSubjectName)
+                .filter(Boolean);
+
+            for (const subject of subjects) {
+                if (candidates.includes(normalizeSubjectName(subject.subject))) {
+                    return subject;
+                }
+            }
+
+            for (const subject of subjects) {
+                const detectedName = normalizeSubjectName(subject.subject);
+                if (detectedName.includes('英语') && candidates.some(candidate => candidate.includes('英语'))) {
+                    return subject;
+                }
+                if (detectedName.includes('专业课') && candidates.some(candidate => candidate.includes('专业课'))) {
+                    const detectedNumber = detectedName.match(/[一二三四五六七八九十\d]+$/);
+                    const candidateNumber = candidates
+                        .map(candidate => candidate.match(/[一二三四五六七八九十\d]+$/))
+                        .find(Boolean);
+                    if (!detectedNumber || !candidateNumber || detectedNumber[0] === candidateNumber[0]) {
+                        return subject;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        function setTimeSelectValue(select, value) {
+            if (!value) return;
+            if (!Array.from(select.options).some(option => option.value === value)) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                select.appendChild(option);
+            }
+            select.value = value;
+        }
+
+        let examScheduleFillToken = 0;
+
+        function applyDetectedSchedule(result) {
+            const subjects = result && Array.isArray(result.subjects) ? result.subjects : [];
+            if (subjects.length === 0) return false;
+
+            const items = document.querySelectorAll('.subject-config-item');
+            let filled = 0;
+            items.forEach(item => {
+                const prefixInput = item.querySelector('.conf-excel-prefix');
+                const pdfNameInput = item.querySelector('.conf-pdf-name');
+                const timeStartSelect = item.querySelector('.conf-time-start');
+                const timeEndSelect = item.querySelector('.conf-time-end');
+                if (!prefixInput || !pdfNameInput || !timeStartSelect || !timeEndSelect) return;
+
+                const defaultPdfName = getDefaultPdfName(prefixInput.value);
+                const detected = findDetectedSubject(defaultPdfName, pdfNameInput.value, subjects);
+                if (!detected) return;
+
+                if (pdfNameInput.value === defaultPdfName) {
+                    pdfNameInput.value = detected.subject;
+                }
+                if (!timeStartSelect.value && !timeEndSelect.value) {
+                    setTimeSelectValue(timeStartSelect, detected.timeStart);
+                    setTimeSelectValue(timeEndSelect, detected.timeEnd);
+                    filled++;
+                }
+            });
+
+            if (filled > 0) {
+                showToast('已根据 PDF 自动填写考试科目与时间，请核对后开始审核', 'success');
+            }
+            return filled > 0;
+        }
+
+        async function autoFillExamSchedule() {
+            if (!auditPdfDir || !auditExcelFile) return;
+            if (document.querySelectorAll('.subject-config-item').length === 0) return;
+
+            const token = ++examScheduleFillToken;
+            try {
+                const result = await ipcRenderer.invoke('detect-exam-schedule', { pdfDir: auditPdfDir });
+                if (token !== examScheduleFillToken) return;
+                applyDetectedSchedule(result);
+            } catch (error) {
+                console.warn('自动识别考试安排失败:', error);
+            }
         }
 
         // 根据 Excel 列名动态生成科目配置界面
@@ -57,11 +161,7 @@
                 const timeOptions = generateTimeOptions();
                 
                 subjects.forEach((subjectPrefix, index) => {
-                    let defaultPdfName = subjectPrefix.replace('科目', '').replace('1', '一').replace('2', '二').replace('3', '三');
-                    // 特殊处理英语科目
-                    if (subjectPrefix === '英语科目' || subjectPrefix === '英语') {
-                        defaultPdfName = '大学英语';
-                    }
+                    const defaultPdfName = getDefaultPdfName(subjectPrefix);
                     
                     const row = document.createElement('div');
                     row.className = 'subject-config-item';
@@ -149,7 +249,7 @@
             ipcRenderer.send('open-pdf-file', filePath);
         }
 
-        ipcRenderer.on('audit-progress', (event, data) => {
+        onIpc('audit-progress', (event, data) => {
             // 计算更精细的进度（基于文件进度 + 当前文件的页数进度）
             const fileBase = data.pFiles / data.tFiles;
             const pageFraction = data.tPages > 0 ? (data.pPages / data.tPages) * (1 / data.tFiles) : 0;
@@ -159,7 +259,7 @@
             document.getElementById('audit-progress-text').innerText = `${percent}% - 正在处理: ${data.currentFile} (第 ${data.pPages}/${data.tPages} 页)`;
         });
 
-        ipcRenderer.on('audit-success', (event, results) => {
+        onIpc('audit-success', (event, results) => {
             const btn = document.getElementById('start-audit-btn');
             btn.disabled = false;
             btn.innerText = '开始智能审核';
@@ -247,7 +347,10 @@
             });
         }
 
-        ipcRenderer.on('audit-error', (event, message) => {
+        document.getElementById('audit-search-input').addEventListener('input', filterAuditResults);
+        document.getElementById('audit-status-filter').addEventListener('change', filterAuditResults);
+
+        onIpc('audit-error', (event, message) => {
             const btn = document.getElementById('start-audit-btn');
             btn.disabled = false;
             btn.innerText = '开始审核';

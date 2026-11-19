@@ -76,13 +76,13 @@
         }
         
         // 照片重命名功能的 IPC 事件监听
-        ipcRenderer.on('selected-photo-folder', (event, path) => {
+        onIpc('selected-photo-folder', (event, path) => {
             photoFolderPath = path;
             document.getElementById('photo-folder-path').value = path;
             updatePhotoRenameBtnState();
         });
         
-        ipcRenderer.on('selected-photo-excel-file', (event, path) => {
+        onIpc('selected-photo-excel-file', (event, path) => {
             photoExcelPath = path;
             document.getElementById('photo-excel-path').value = path;
             
@@ -119,22 +119,22 @@
             updatePhotoRenameBtnState();
         }
 
-        ipcRenderer.on('selected-photo-output-folder', (event, path) => {
+        onIpc('selected-photo-output-folder', (event, path) => {
             photoOutputPath = path;
             document.getElementById('photo-output-path').value = path;
             updatePhotoRenameBtnState();
         });
         
-        ipcRenderer.on('renaming-status', (event, message) => {
+        onIpc('renaming-status', (event, message) => {
             addLog(message);
         });
         
-        ipcRenderer.on('renaming-progress', (event, progress) => {
+        onIpc('renaming-progress', (event, progress) => {
             document.getElementById('photo-rename-progress').style.width = `${progress}%`;
             document.getElementById('progress-text').innerText = `进度: ${progress}%`;
         });
         
-        ipcRenderer.on('renaming-finished', (event, success) => {
+        onIpc('renaming-finished', (event, success) => {
             isProcessing = false;
             document.getElementById('photo-rename-btn').disabled = false;
             document.getElementById('stop-rename-btn').disabled = true;

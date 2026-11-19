@@ -90,7 +90,11 @@
         }
         
         // 绑定设置事件
+        let settingsEventsBound = false;
+
         function bindSettingsEvents() {
+            if (settingsEventsBound) return;
+            settingsEventsBound = true;
             // 开机自启动
             document.getElementById('setting-autostart').addEventListener('change', function() {
                 appSettings.autostart = this.checked;
@@ -149,10 +153,15 @@
             });
             
             // 监听系统主题变化
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+            const handleDarkModeChange = (e) => {
                 if (appSettings.theme === 'system') {
                     document.body.classList.toggle('dark-theme', e.matches);
                 }
+            };
+            darkModeMedia.addEventListener('change', handleDarkModeChange);
+            window.addEventListener('beforeunload', () => {
+                darkModeMedia.removeEventListener('change', handleDarkModeChange);
             });
         }
         
@@ -161,7 +170,7 @@
             ipcRenderer.send('select-default-output-dir');
         }
         
-        ipcRenderer.on('selected-default-output-dir', (event, path) => {
+        onIpc('selected-default-output-dir', (event, path) => {
             appSettings.defaultOutputDir = path;
             document.getElementById('default-output-dir-display').textContent = path || '与源文件相同目录';
             saveSettings();
@@ -174,7 +183,7 @@
             }
         }
         
-        ipcRenderer.on('cache-cleared', (event, success) => {
+        onIpc('cache-cleared', (event, success) => {
             if (success) {
                 alert('缓存已清理完成！');
                 getCacheSize();
@@ -188,7 +197,7 @@
             ipcRenderer.send('get-cache-size');
         }
         
-        ipcRenderer.on('cache-size', (event, size) => {
+        onIpc('cache-size', (event, size) => {
             document.getElementById('cache-size').textContent = size;
         });
         
@@ -197,7 +206,7 @@
             ipcRenderer.send('export-settings', appSettings);
         }
         
-        ipcRenderer.on('settings-exported', (event, success, path) => {
+        onIpc('settings-exported', (event, success, path) => {
             if (success) {
                 alert(`设置已导出到: ${path}`);
             } else {
@@ -210,7 +219,7 @@
             ipcRenderer.send('import-settings');
         }
         
-        ipcRenderer.on('settings-imported', (event, settings) => {
+        onIpc('settings-imported', (event, settings) => {
             if (settings) {
                 appSettings = { ...defaultSettings, ...settings };
                 saveSettings();

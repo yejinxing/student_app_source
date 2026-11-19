@@ -1,8 +1,9 @@
 const path = require('path');
 const fs = require('fs-extra');
 const { app } = require('electron');
+const { sanitizeSettings } = require('./settingsSchema');
 
-let appSettings = {};
+let appSettings = sanitizeSettings({});
 
 function getSettingsPath() {
     return path.join(app.getPath('userData'), 'settings.json');
@@ -11,27 +12,14 @@ function getSettingsPath() {
 function loadAppSettings() {
     try {
         const settingsPath = getSettingsPath();
-        if (fs.existsSync(settingsPath)) {
-            appSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-        }
+        appSettings = fs.existsSync(settingsPath)
+            ? sanitizeSettings(JSON.parse(fs.readFileSync(settingsPath, 'utf8')))
+            : sanitizeSettings({});
     } catch (e) {
         console.error('加载设置失败:', e);
-        appSettings = {};
+        appSettings = sanitizeSettings({});
     }
     return appSettings;
-}
-
-function sanitizeSettings(settings) {
-    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-        return {};
-    }
-
-    const sanitized = { ...settings };
-    if (sanitized.opacity !== undefined) {
-        const opacity = Number(sanitized.opacity);
-        sanitized.opacity = Number.isFinite(opacity) ? Math.min(100, Math.max(20, opacity)) : 100;
-    }
-    return sanitized;
 }
 
 function saveAppSettings(settings) {
@@ -50,7 +38,7 @@ function getSettings() {
 }
 
 function setSettings(settings) {
-    appSettings = settings;
+    appSettings = sanitizeSettings(settings);
 }
 
 module.exports = { getSettingsPath, loadAppSettings, saveAppSettings, getSettings, setSettings, sanitizeSettings };
