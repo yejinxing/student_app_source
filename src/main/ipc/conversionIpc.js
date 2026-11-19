@@ -4,8 +4,18 @@ const { ipcMain, dialog } = require('electron');
 const { convertExcelToWord } = require('../../converter');
 const { getMainWindow } = require('../window');
 const { assetPath } = require('../paths');
+const { runConversion } = require('../converterRunner');
 
 function registerConversionIpc() {
+    async function runInline(event, excelPath, outputPath) {
+        try {
+            await convertExcelToWord(excelPath, outputPath);
+            event.reply('conversion-success', outputPath);
+        } catch (error) {
+            event.reply('conversion-error', error.message);
+        }
+    }
+
     ipcMain.handle('select-file', async () => {
         const result = await dialog.showOpenDialog(getMainWindow(), {
             properties: ['openFile'],
@@ -15,21 +25,32 @@ function registerConversionIpc() {
     });
 
     ipcMain.on('start-conversion', async (event, { excelPath }) => {
-        try {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
 
-            const outputPath = path.join(path.dirname(excelPath), `新生名册_${timestamp}.docx`);
-            await convertExcelToWord(excelPath, outputPath);
-            event.reply('conversion-success', outputPath);
+        const outputPath = path.join(path.dirname(excelPath), `新生名册_${timestamp}.docx`);
+
+        if (process.env.STUDENT_APP_CONVERT_INLINE === '1') {
+            await runInline(event, excelPath, outputPath);
+            return;
+        }
+
+        try {
+            runConversion({
+                excelPath,
+                outputPath,
+                onResult: (resultPath) => event.reply('conversion-success', resultPath),
+                onError: (error) => event.reply('conversion-error', error.message)
+            });
         } catch (error) {
-            event.reply('conversion-error', error.message);
+            console.error('启动转换进程失败，回退到主进程:', error);
+            await runInline(event, excelPath, outputPath);
         }
     });
 
