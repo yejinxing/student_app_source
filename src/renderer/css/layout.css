@@ -1,0 +1,222 @@
+        /* 左侧边栏 */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            width: 72px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 12px;
+            z-index: 1000;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .sidebar.expanded {
+            width: 200px;
+        }
+        
+        /* 横跨边界的切换按钮 */
+        .sidebar-toggle {
+            position: absolute;
+            right: -14px;
+            top: 28px;
+            width: 28px;
+            height: 28px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 1001;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .sidebar-toggle:hover {
+            background: var(--bg-tertiary);
+            transform: scale(1.1);
+        }
+        
+        .sidebar-toggle svg {
+            width: 14px;
+            height: 14px;
+            color: var(--text-secondary);
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar.expanded .sidebar-toggle svg {
+            transform: rotate(180deg);
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-top: 48px;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 12px;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .nav-item:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        }
+        
+        .nav-item .nav-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .nav-item .nav-icon svg {
+            width: 22px;
+            height: 22px;
+            color: var(--text-secondary);
+            transition: color 0.2s ease;
+        }
+        
+        .nav-item:hover .nav-icon svg {
+            color: var(--text-primary);
+        }
+        
+        .nav-item.active .nav-icon svg {
+            color: white;
+        }
+        
+        .nav-item .nav-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .sidebar.expanded .nav-item .nav-label {
+            opacity: 1;
+        }
+        
+        .nav-item:hover .nav-label {
+            color: var(--text-primary);
+        }
+        
+        .nav-item.active .nav-label {
+            color: white;
+        }
+        
+        .sidebar-footer {
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            margin-top: auto;
+        }
+        
+        /* 导航项提示气泡 */
+        .nav-item::after {
+            content: attr(title);
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 12px;
+            padding: 8px 12px;
+            background: var(--text-primary);
+            color: var(--bg-primary);
+            font-size: 12px;
+            font-weight: 500;
+            border-radius: var(--radius-sm);
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 1001;
+        }
+        
+        .nav-item::before {
+            content: '';
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 4px;
+            border: 6px solid transparent;
+            border-right-color: var(--text-primary);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 1001;
+        }
+        
+        .sidebar:not(.expanded) .nav-item:hover::after,
+        .sidebar:not(.expanded) .nav-item:hover::before {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* 隐藏底部导航 */
+        .bottom-nav {
+            display: none;
+        }
+        
+        /* 主内容区域 */
+        .content {
+            margin-left: 72px;
+            padding: 32px 48px 60px 48px;
+            min-height: 100vh;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .sidebar.expanded ~ .content {
+            margin-left: 200px;
+        }
+        
+        /* 内容容器 - 限制最大宽度但居中 */
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        /* 页面头部 */
+        .page-header {
+            margin-bottom: 32px;
+            padding: 0;
+            border: none;
+        }
+        
+        .page-header h2 {
+            color: var(--text-primary);
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.5px;
+        }
+        
+        .page-header-subtitle {
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 400;
+        }
+        

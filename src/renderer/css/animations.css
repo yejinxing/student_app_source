@@ -1,0 +1,42 @@
+        /* 动画效果 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .card {
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        .settings-section:nth-child(1) { animation-delay: 0s; }
+        .settings-section:nth-child(2) { animation-delay: 0.05s; }
+        .settings-section:nth-child(3) { animation-delay: 0.1s; }
+        .settings-section:nth-child(4) { animation-delay: 0.15s; }
+        .settings-section:nth-child(5) { animation-delay: 0.2s; }
+        .settings-section:nth-child(6) { animation-delay: 0.25s; }
+
+        .app-toast {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 10000;
+            max-width: 420px;
+            padding: 12px 18px;
+            border-radius: 8px;
+            background: #323232;
+            color: #fff;
+            font-size: 14px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            pointer-events: none;
+        }
+
+        .app-toast-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .app-toast-success { background: #16a34a; }
+        .app-toast-error { background: #dc2626; }
