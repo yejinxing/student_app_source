@@ -19,7 +19,13 @@
 - 实时进度显示和详细日志记录
 - 支持中断和恢复功能
 
-### 3. 系统特性
+### 3. 准考证审核工具
+- 选择 PDF 文件夹与 Excel 后，自动抽样识别考试科目与多数考试时间并回填
+- 自动核对身份、日期、考场、座位与考试时间
+- 未配置时间的科目、PDF 中出现未校验的考试行会标记为异常
+- 支持结果搜索与状态筛选
+
+### 4. 系统特性
 - 现代化的用户界面设计
 - 响应式布局，适配不同屏幕尺寸
 - 实时状态反馈和错误处理
@@ -68,9 +74,9 @@ npm run build
 
 ### 运行测试
 ```bash
-npm test                  # 单元 + 集成测试
-npm run test:smoke        # Electron 启动与 IPC 冒烟测试
-npm run test:coverage     # 覆盖率统计
+npm test                  # 单元 + 集成测试（39 个）
+npm run test:smoke        # Electron 启动、IPC、审核与转换 worker 冒烟测试
+npm run test:coverage     # 覆盖率统计（当前约 90% 行覆盖）
 npm run verify:package    # 校验打包产物（需先 npm run build）
 ```
 
@@ -120,11 +126,12 @@ student_app_source/
 ├── main.js                     # 主进程入口（生命周期与模块装配）
 ├── index.html                  # 页面骨架
 ├── src/
-│   ├── converter.js            # Excel 转 Word
+│   ├── converter.js            # Excel 转 Word 入口（转导出 converter/）
+│   ├── converter/              # 统计、样式、汇总表、文本宽度、文档生成
 │   ├── photoRenamer.js         # 照片重命名
 │   ├── ticketAuditor.js        # 准考证审核解析
 │   ├── preload.js              # contextBridge IPC 白名单
-│   ├── main/                   # 窗口、设置、自动更新、IPC、审核 worker
+│   ├── main/                   # 窗口、设置、自动更新、安全策略、IPC、worker
 │   └── renderer/               # 页面 CSS 与 JS
 ├── assets/                     # 图标与 Excel 模板
 ├── tests/

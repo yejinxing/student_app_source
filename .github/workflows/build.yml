@@ -200,126 +200,97 @@ jobs:
 
       # 同步发布到 Gitee（可选，需要配置 GITEE_TOKEN）
       - name: Create Gitee Release
-        continue-on-error: true
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
           GITEE_OWNER: yejinxing
           GITEE_REPO: student_app_source
         run: |
-          # 检查 GITEE_TOKEN 是否存在
           if [ -z "$GITEE_TOKEN" ]; then
             echo "GITEE_TOKEN 未配置，跳过 Gitee 发布"
             exit 0
           fi
-          
-          # 获取版本号
+
           VERSION=${GITHUB_REF#refs/tags/}
           echo "Creating Gitee release for $VERSION"
-          
-          # 读取发布说明并添加下载引导
-          GITHUB_RELEASE_URL="https://github.com/yejinxing/student_app_source/releases/tag/${VERSION}"
-          
-          # 读取原始发布说明
-          ORIGINAL_BODY=$(cat RELEASE_NOTES.md)
-          
-          # 构建下载说明（使用 printf 避免 YAML 特殊字符问题）
-          DOWNLOAD_NOTE=$(printf '\n\n---\n\n## 下载说明\n\n由于 Gitee 文件大小限制，安装包请通过以下方式下载：\n\n1. 应用内更新：软件会自动使用镜像加速下载\n2. 手动下载：请访问 GitHub Release 页面\n\nGitHub Release: %s' "${GITHUB_RELEASE_URL}")
-          
-          FULL_BODY="${ORIGINAL_BODY}${DOWNLOAD_NOTE}"
-          BODY=$(echo "$FULL_BODY" | jq -Rs .)
-          
-          # 创建 Release（需要指定 target_commitish）
-          RELEASE_RESPONSE=$(curl -s -X POST \
-            "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"access_token\": \"${GITEE_TOKEN}\",
-              \"tag_name\": \"${VERSION}\",
-              \"name\": \"${VERSION}\",
-              \"body\": ${BODY},
-              \"prerelease\": false,
-              \"target_commitish\": \"main\"
-            }")
-          
-          echo "Gitee Release Response: $RELEASE_RESPONSE"
-          
-          # 检查是否成功
-          RELEASE_ID=$(echo $RELEASE_RESPONSE | jq -r '.id')
-          
-          if [ "$RELEASE_ID" != "null" ] && [ -n "$RELEASE_ID" ]; then
-            echo "✅ Gitee Release created successfully with ID: $RELEASE_ID"
-            echo "Gitee Release URL: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/tag/${VERSION}"
-            
-            # 上传 yml 和 blockmap 文件到 Gitee Release
-            echo "开始上传元数据文件到 Gitee..."
-            
-            # 上传 latest.yml, latest-mac.yml, latest-linux.yml
-            for yml_file in dist/latest*.yml dist/*.yaml; do
-              if [ -f "$yml_file" ]; then
-                filename=$(basename "$yml_file")
-                echo "上传 $filename..."
-                curl -s -X POST \
-                  "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${RELEASE_ID}/attach_files" \
-                  -H "Authorization: token ${GITEE_TOKEN}" \
-                  -F "file=@${yml_file}" \
-                  -F "access_token=${GITEE_TOKEN}" || echo "上传 $filename 失败（可能已存在）"
-              fi
-            done
-            
-            # 上传 blockmap 文件
-            for blockmap_file in dist/*.blockmap; do
-              if [ -f "$blockmap_file" ]; then
-                filename=$(basename "$blockmap_file")
-                echo "上传 $filename..."
-                curl -s -X POST \
-                  "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${RELEASE_ID}/attach_files" \
-                  -H "Authorization: token ${GITEE_TOKEN}" \
-                  -F "file=@${blockmap_file}" \
-                  -F "access_token=${GITEE_TOKEN}" || echo "上传 $filename 失败（可能已存在）"
-              fi
-            done
-            
-            echo "✅ 元数据文件上传完成"
-          else
-            echo "⚠️ Gitee Release creation failed or already exists"
-            echo "Response: $RELEASE_RESPONSE"
-            
-            # 如果 Release 已存在，尝试获取 Release ID 并上传文件
-            EXISTING_RELEASE=$(curl -s -X GET \
-              "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/tags/${VERSION}?access_token=${GITEE_TOKEN}")
-            
-            EXISTING_RELEASE_ID=$(echo $EXISTING_RELEASE | jq -r '.id')
-            
-            if [ "$EXISTING_RELEASE_ID" != "null" ] && [ -n "$EXISTING_RELEASE_ID" ]; then
-              echo "找到已存在的 Release，ID: $EXISTING_RELEASE_ID"
-              echo "开始上传元数据文件..."
-              
-              # 上传 yml 和 blockmap 文件
-              for yml_file in dist/latest*.yml dist/*.yaml; do
-                if [ -f "$yml_file" ]; then
-                  filename=$(basename "$yml_file")
-                  echo "上传 $filename..."
-                  curl -s -X POST \
-                    "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${EXISTING_RELEASE_ID}/attach_files" \
-                    -H "Authorization: token ${GITEE_TOKEN}" \
-                    -F "file=@${yml_file}" \
-                    -F "access_token=${GITEE_TOKEN}" || echo "上传 $filename 失败（可能已存在）"
-                fi
-              done
-              
-              for blockmap_file in dist/*.blockmap; do
-                if [ -f "$blockmap_file" ]; then
-                  filename=$(basename "$blockmap_file")
-                  echo "上传 $filename..."
-                  curl -s -X POST \
-                    "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${EXISTING_RELEASE_ID}/attach_files" \
-                    -H "Authorization: token ${GITEE_TOKEN}" \
-                    -F "file=@${blockmap_file}" \
-                    -F "access_token=${GITEE_TOKEN}" || echo "上传 $filename 失败（可能已存在）"
-                fi
-              done
-              
-              echo "✅ 元数据文件上传完成"
+
+          upload_asset() {
+            local file="$1"
+            local release_id="$2"
+            local filename
+            filename=$(basename "$file")
+
+            local existing
+            existing=$(curl -fsS \
+              "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${release_id}?access_token=${GITEE_TOKEN}" \
+              | jq -r ".assets[].name" 2>/dev/null || true)
+            if echo "$existing" | grep -Fxq "$filename"; then
+              echo "✓ $filename 已存在，跳过"
+              return 0
             fi
+
+            local attempt=1
+            while [ "$attempt" -le 3 ]; do
+              if curl -f -sS -X POST \
+                "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${release_id}/attach_files" \
+                -H "Authorization: token ${GITEE_TOKEN}" \
+                -F "file=@${file}" \
+                -F "access_token=${GITEE_TOKEN}"; then
+                echo "✓ 上传 $filename"
+                return 0
+              fi
+              echo "上传 $filename 失败（第 ${attempt}/3 次）"
+              attempt=$((attempt + 1))
+              sleep 2
+            done
+            echo "::error::上传 $filename 到 Gitee 失败"
+            return 1
+          }
+
+          RELEASE_ID=$(curl -fsS -X GET \
+            "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/tags/${VERSION}?access_token=${GITEE_TOKEN}" \
+            | jq -r ".id // empty" 2>/dev/null || true)
+
+          if [ -z "$RELEASE_ID" ]; then
+            GITHUB_RELEASE_URL="https://github.com/yejinxing/student_app_source/releases/tag/${VERSION}"
+            ORIGINAL_BODY=$(cat RELEASE_NOTES.md)
+            DOWNLOAD_NOTE=$(printf "\n\n---\n\n## 下载说明\n\n由于 Gitee 文件大小限制，安装包请通过以下方式下载：\n\n1. 应用内更新：软件会自动使用镜像加速下载\n2. 手动下载：请访问 GitHub Release 页面\n\nGitHub Release: %s" "${GITHUB_RELEASE_URL}")
+            FULL_BODY="${ORIGINAL_BODY}${DOWNLOAD_NOTE}"
+            BODY=$(echo "$FULL_BODY" | jq -Rs .)
+
+            RELEASE_RESPONSE=$(curl -fsS -X POST \
+              "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"access_token\": \"${GITEE_TOKEN}\",
+                \"tag_name\": \"${VERSION}\",
+                \"name\": \"${VERSION}\",
+                \"body\": ${BODY},
+                \"prerelease\": false,
+                \"target_commitish\": \"main\"
+              }")
+
+            RELEASE_ID=$(echo "${RELEASE_RESPONSE}" | jq -r ".id // empty")
+            if [ -z "$RELEASE_ID" ]; then
+              echo "::error::创建 Gitee Release 失败: ${RELEASE_RESPONSE}"
+              exit 1
+            fi
+            echo "✓ 已创建 Gitee Release: $RELEASE_ID"
+          else
+            echo "✓ 使用已有 Gitee Release: $RELEASE_ID"
           fi
 
+          UPLOAD_FAILED=0
+          for metadata_file in dist/latest*.yml dist/*.yaml dist/*.blockmap; do
+            if [ -f "$metadata_file" ]; then
+              if ! upload_asset "$metadata_file" "$RELEASE_ID"; then
+                UPLOAD_FAILED=1
+              fi
+            fi
+          done
+
+          if [ "$UPLOAD_FAILED" -ne 0 ]; then
+            echo "::error::部分 Gitee 元数据上传失败，差量更新可能不可用"
+            exit 1
+          fi
+
+          echo "✓ Gitee 元数据上传完成"

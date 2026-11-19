@@ -3,11 +3,18 @@
 ## 🛠️ 重构与优化（开发中，未发布）
 
 - 拆分主进程与渲染层：`main.js` 从 2701 行降至入口级，新增 `src/main/**` 与 `src/renderer/**`
-- Electron 安全加固：preload + contextBridge + contextIsolation，移除 nodeIntegration，增加 CSP 与本地渲染依赖
-- 新增 25 个单元/集成测试与 Electron 冒烟测试，CI 构建前自动运行
-- 准考证解析迁移至 `utilityProcess`，避免大文件阻塞主进程
+- 拆分自动更新与 Excel 转换：`updater/`、`converter/` 模块化，最大源文件降至 408 行
+- Electron 安全加固：preload + contextBridge + contextIsolation，移除 nodeIntegration
+- 增加严格 CSP：移除内联事件，改用 `data-action` 事件委托；本地化 marked/DOMPurify
+- 安全校验：设置 schema、GitHub/Gitee 链接白名单、文件 realpath 与扩展名校验
+- 新增 34 个单元/集成测试与 Electron 冒烟测试，覆盖率约 90%
+- 准考证解析与 Excel 转换迁移至 `utilityProcess`，避免大文件阻塞主进程
 - 修复：`showToast` 未定义、`excel-columns` 串页、更新清理标记变量未定义、日期归一化不补零、VBS 转义与非 Windows 安装
+- 修复：utilityProcess 中 pdfjs 环境误判导致 `workerSrc`、标准字体 `fetch failed` 与审核结果全 0 的问题
+- 准考证审核自动识别：抽样 PDF 后按“科目 + 时间”统计多数记录并回填，用户可手动修改
+- 审核严格性：科目行未配置考试时间、PDF 出现未校验的考试科目行时判为异常
 - 打包：修复 LICENSE 打包、pdfjs 字体解包，新增 asar 产物校验
+- CI：Gitee 元数据上传失败不再静默，差量更新资产缺失会显式报错
 
 ## 📋 更新内容
 

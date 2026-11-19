@@ -34,6 +34,12 @@ const required = [
     '/src/main/window.js',
     '/src/main/updater/index.js',
     '/src/main/workers/ticketAuditWorker.js',
+    '/src/main/workers/converterWorker.js',
+    '/src/main/converterRunner.js',
+    '/src/main/settingsSchema.js',
+    '/src/main/urlPolicy.js',
+    '/src/converter/index.js',
+    '/src/converter/document.js',
     '/src/renderer/js/core.js',
     '/src/renderer/css/base.css',
     '/assets/icon.png',
@@ -41,7 +47,8 @@ const required = [
     '/assets/准考证审核数据模板.xlsx',
     '/node_modules/marked/lib/marked.umd.js',
     '/node_modules/dompurify/dist/purify.min.js',
-    '/node_modules/pdfjs-dist/legacy/build/pdf.js'
+    '/node_modules/pdfjs-dist/legacy/build/pdf.js',
+    '/node_modules/pdfjs-dist/legacy/build/pdf.worker.js'
 ];
 
 const missing = required.filter((file) => !files.includes(file));
