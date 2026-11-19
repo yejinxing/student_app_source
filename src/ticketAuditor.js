@@ -6,7 +6,12 @@ const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
 // 日期归一化：将各种格式转为纯数字 20250418
 function normalizeDate(d) {
     if (!d) return '';
-    return String(d).replace(/\D/g, '');
+    const text = String(d);
+    const parts = text.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    if (parts) {
+        return `${parts[1]}${parts[2].padStart(2, '0')}${parts[3].padStart(2, '0')}`;
+    }
+    return text.replace(/\D/g, '');
 }
 
 // 解析 Excel
@@ -42,7 +47,9 @@ function extractInfoFromText(text) {
 }
 
 // 核心审核逻辑
-async function auditTickets(pdfDirPath, excelPath, subjectConfigs, progressCallback) {
+async function auditTickets(pdfDirPath, excelPath, subjectConfigs, progressCallback, options = {}) {
+    const cmapsDir = options.cmapsDir || path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'cmaps');
+    const standardFontsDir = options.standardFontsDir || path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'standard_fonts');
     const { idMap, nameMap } = parseExcelData(excelPath);
     const pdfFiles = [];
     const entries = await fs.readdir(pdfDirPath, { withFileTypes: true });
@@ -59,13 +66,12 @@ async function auditTickets(pdfDirPath, excelPath, subjectConfigs, progressCallb
             const dataBuffer = new Uint8Array(await fs.readFile(filePath));
             const loadingTask = pdfjsLib.getDocument({
                 data: dataBuffer,
-                cMapUrl: path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'cmaps') + path.sep,
+                cMapUrl: cmapsDir + path.sep,
                 cMapPacked: true,
-                standardFontDataUrl: path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'standard_fonts') + path.sep
+                standardFontDataUrl: standardFontsDir + path.sep
             });
             const doc = await loadingTask.promise;
             for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-                if (pageNum % 3 === 0) await new Promise(r => setTimeout(r, 5));
                 if (progressCallback) progressCallback(i, pdfFiles.length, pageNum, doc.numPages, fileName);
                 const page = await doc.getPage(pageNum);
                 const textContent = await page.getTextContent();
@@ -184,4 +190,4 @@ async function auditTickets(pdfDirPath, excelPath, subjectConfigs, progressCallb
     return auditResults;
 }
 
-module.exports = { auditTickets };
+module.exports = { auditTickets, normalizeDate, extractInfoFromText, parseExcelData };
