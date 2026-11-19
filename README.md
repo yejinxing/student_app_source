@@ -48,8 +48,8 @@
 ## 📦 安装和运行
 
 ### 环境要求
-- Node.js 14.0或更高版本
-- npm或yarn包管理器
+- Node.js 22 或更高版本
+- npm 或 yarn 包管理器
 
 ### 安装依赖
 ```bash
@@ -64,6 +64,19 @@ npm start
 ### 打包应用程序
 ```bash
 npm run build
+```
+
+### 运行测试
+```bash
+npm test                  # 单元 + 集成测试
+npm run test:smoke        # Electron 启动与 IPC 冒烟测试
+npm run test:coverage     # 覆盖率统计
+npm run verify:package    # 校验打包产物（需先 npm run build）
+```
+
+冒烟测试可通过环境变量校验打包后的应用：
+```bash
+STUDENT_APP_EXECUTABLE="dist/win-unpacked/学生信息处理工具.exe" npm run test:smoke
 ```
 
 ## 🔧 使用说明
@@ -104,17 +117,24 @@ npm run build
 
 ```
 student_app_source/
-├── main.js                 # 主进程入口
-├── index.html              # 主界面
-├── converter.js            # Excel转Word功能
-├── photoRenamer.js         # 照片重命名核心功能
-├── check_excel_fields.js   # Excel字段检查工具
-├── test_converter.js       # Excel转Word测试脚本
-├── test_photo_renamer.js   # 照片重命名测试脚本
-├── package.json            # 项目配置
-├── package-lock.json       # 依赖锁定文件
-├── .gitignore              # Git忽略配置
-└── README.md               # 项目文档
+├── main.js                     # 主进程入口（生命周期与模块装配）
+├── index.html                  # 页面骨架
+├── src/
+│   ├── converter.js            # Excel 转 Word
+│   ├── photoRenamer.js         # 照片重命名
+│   ├── ticketAuditor.js        # 准考证审核解析
+│   ├── preload.js              # contextBridge IPC 白名单
+│   ├── main/                   # 窗口、设置、自动更新、IPC、审核 worker
+│   └── renderer/               # 页面 CSS 与 JS
+├── assets/                     # 图标与 Excel 模板
+├── tests/
+│   ├── unit/                   # node:test 单元测试
+│   ├── integration/            # 集成测试
+│   ├── smoke/                  # Electron 冒烟测试
+│   └── manual/                 # 手动脚本
+├── scripts/                    # 构建、YAML 与产物校验脚本
+├── package.json                # 项目配置
+└── package-lock.json           # 依赖锁定文件
 ```
 
 ## 📄 许可协议
@@ -141,7 +161,13 @@ GPL-3.0 License - 查看 LICENSE 文件以获取详细信息
 
 ## 📈 版本历史
 
-### v1.0.0 (2026-01-09)
+### v1.0.1 (2026-04-18)
+- 新增准考证审核功能（PDF 解析、身份/日期/考场座位校验）
+- 新增准考证审核模板下载
+- 优化 Excel 转 Word 的统计表格样式与层次判断
+- 首页与审核页面交互优化
+
+### v1.0.0 (2026-01-15)
 - 初始版本发布
 - 支持Excel转Word文档功能
 - 支持考生照片重命名功能

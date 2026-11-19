@@ -1,5 +1,14 @@
 # 🎉 学生信息处理工具 v1.0.1
 
+## 🛠️ 重构与优化（开发中，未发布）
+
+- 拆分主进程与渲染层：`main.js` 从 2701 行降至入口级，新增 `src/main/**` 与 `src/renderer/**`
+- Electron 安全加固：preload + contextBridge + contextIsolation，移除 nodeIntegration，增加 CSP 与本地渲染依赖
+- 新增 25 个单元/集成测试与 Electron 冒烟测试，CI 构建前自动运行
+- 准考证解析迁移至 `utilityProcess`，避免大文件阻塞主进程
+- 修复：`showToast` 未定义、`excel-columns` 串页、更新清理标记变量未定义、日期归一化不补零、VBS 转义与非 Windows 安装
+- 打包：修复 LICENSE 打包、pdfjs 字体解包，新增 asar 产物校验
+
 ## 📋 更新内容
 
 ### 📄 准考证审核功能 (新功能!)
