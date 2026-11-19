@@ -24,4 +24,19 @@ async function handleStart(message, { auditTickets, send }) {
     }
 }
 
-module.exports = { handleStart };
+async function handleDetect(message, { detectExamSchedule, send }) {
+    if (!message || message.type !== 'detect') {
+        return false;
+    }
+
+    try {
+        const result = await detectExamSchedule(message.pdfDir, { maxFiles: message.maxFiles });
+        send({ type: 'detect-result', result });
+        return true;
+    } catch (error) {
+        send({ type: 'error', message: error.message });
+        return false;
+    }
+}
+
+module.exports = { handleStart, handleDetect };

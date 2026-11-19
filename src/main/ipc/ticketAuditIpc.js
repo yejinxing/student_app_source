@@ -3,7 +3,7 @@ const fs = require('fs-extra');
 const { ipcMain, dialog, shell } = require('electron');
 const { auditTickets } = require('../../ticketAuditor');
 const { getMainWindow } = require('../window');
-const { runTicketAudit } = require('../ticketAuditRunner');
+const { runTicketAudit, detectExamScheduleViaWorker } = require('../ticketAuditRunner');
 
 function registerTicketAuditIpc() {
     let activeAudit = null;
@@ -33,6 +33,14 @@ function registerTicketAuditIpc() {
             return result.filePaths[0];
         }
         return null;
+    });
+
+    ipcMain.handle('detect-exam-schedule', async (event, options) => {
+        const pdfDir = options && options.pdfDir;
+        if (!pdfDir) {
+            return { subjects: [], scannedFiles: 0, totalFiles: 0 };
+        }
+        return detectExamScheduleViaWorker(pdfDir, options.maxFiles);
     });
 
     ipcMain.on('start-ticket-audit', async (event, options) => {
@@ -76,9 +84,13 @@ function registerTicketAuditIpc() {
     ipcMain.on('open-pdf-file', (event, filePath) => {
         try {
             const resolved = path.resolve(String(filePath));
-            if (path.extname(resolved).toLowerCase() !== '.pdf') return;
             if (!fs.existsSync(resolved)) return;
-            shell.openPath(resolved);
+
+            const realPath = fs.realpathSync(resolved);
+            if (path.extname(realPath).toLowerCase() !== '.pdf') return;
+            if (!fs.statSync(realPath).isFile()) return;
+
+            shell.openPath(realPath);
         } catch (e) {
             console.warn('打开 PDF 失败:', e.message);
         }

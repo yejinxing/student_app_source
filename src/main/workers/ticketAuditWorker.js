@@ -1,4 +1,4 @@
-const { handleStart } = require('./ticketAuditWorkerCore');
+const { handleStart, handleDetect } = require('./ticketAuditWorkerCore');
 
 function send(message) {
     if (process.parentPort) {
@@ -9,10 +9,19 @@ function send(message) {
 if (process.parentPort) {
     process.parentPort.on('message', async (event) => {
         const message = event.data;
-        if (!message || message.type !== 'start') return;
+        if (!message) return;
 
-        const { auditTickets } = require('../../ticketAuditor');
-        const success = await handleStart(message, { auditTickets, send });
+        const { auditTickets, detectExamSchedule } = require('../../ticketAuditor');
+        let success = false;
+
+        if (message.type === 'start') {
+            success = await handleStart(message, { auditTickets, send });
+        } else if (message.type === 'detect') {
+            success = await handleDetect(message, { detectExamSchedule, send });
+        } else {
+            return;
+        }
+
         process.exit(success ? 0 : 1);
     });
 }

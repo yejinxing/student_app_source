@@ -6,7 +6,10 @@ const xlsx = require('xlsx');
 const {
     normalizeDate,
     extractInfoFromText,
-    parseExcelData
+    parseExcelData,
+    parseExamRow,
+    aggregateExamSchedules,
+    findUnconfiguredExamRows
 } = require('../../src/ticketAuditor');
 const { makeTempDir, removeTempDir } = require('../helpers/tmp');
 
@@ -58,4 +61,46 @@ test('parseExcelData 同时按准考证号、身份证号和姓名建立索引',
     assert.equal(idMap.get('110101200001010011').姓名, '张三');
     assert.equal(nameMap.get('张三').length, 1);
     assert.equal(nameMap.get('张三')[0].考试日期, '2025-04-18');
+});
+
+test('parseExamRow 解析日期、时间与科目行', () => {
+    assert.deepEqual(
+        parseExamRow('2025-04-18  | 09:00 - 11:00  | 大学英语 |   | 054  | 21'),
+        {
+            date: '2025-04-18',
+            timeStart: '09:00',
+            timeEnd: '11:00',
+            time: '09:00-11:00',
+            subject: '大学英语'
+        }
+    );
+    assert.equal(parseExamRow('不是考试行'), null);
+});
+
+test('aggregateExamSchedules 选择每个科目出现最多的时间', () => {
+    const result = aggregateExamSchedules([
+        { subject: '大学英语', timeStart: '09:00', timeEnd: '11:00' },
+        { subject: '大学英语', timeStart: '09:00', timeEnd: '11:00' },
+        { subject: '大学英语', timeStart: '10:00', timeEnd: '12:00' },
+        { subject: '专业课一', timeStart: '14:00', timeEnd: '15:30' }
+    ]);
+
+    assert.equal(result[0].subject, '大学英语');
+    assert.equal(result[0].timeStart, '09:00');
+    assert.equal(result[0].timeEnd, '11:00');
+    assert.equal(result[0].count, 2);
+    assert.ok(result.some(item => item.subject === '专业课一' && item.time === '14:00-15:30'));
+});
+
+test('findUnconfiguredExamRows 识别 PDF 中未配置的考试行', () => {
+    const lines = [
+        '2025-04-18 | 09:00 - 11:00 | 大学英语 | | 054 | 21',
+        '2025-04-18 | 14:00 - 15:30 | 专业课一 | | 054 | 21'
+    ];
+
+    assert.deepEqual(findUnconfiguredExamRows(lines, [{ pdfName: '大学英语' }]), ['专业课一']);
+    assert.deepEqual(
+        findUnconfiguredExamRows(lines, [{ pdfName: '大学英语' }, { pdfName: '专业课一' }]),
+        []
+    );
 });
