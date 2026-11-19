@@ -44,41 +44,60 @@ function registerPhotoRenameIpc() {
         }
     });
 
+    let activeRenamer = null;
+    let activeRunId = 0;
+
     ipcMain.on('start-renaming', async (event, options) => {
         const { photoDir, excelPath, outputDir, outputExt, inputField, outputField } = options;
 
+        if (activeRenamer) {
+            activeRenamer.stop();
+        }
+
+        const runId = ++activeRunId;
+        const renamer = new PhotoRenamer({
+            photoDir,
+            excelPath,
+            outputDir,
+            outputExt,
+            inputField,
+            outputField
+        });
+        activeRenamer = renamer;
+
+        renamer.setStatusCallback((message) => {
+            if (runId === activeRunId) event.reply('renaming-status', message);
+        });
+
+        renamer.setProgressCallback((progress) => {
+            if (runId === activeRunId) event.reply('renaming-progress', progress);
+        });
+
+        renamer.setFinishCallback((success) => {
+            if (runId !== activeRunId) return;
+            activeRenamer = null;
+            event.reply('renaming-finished', success);
+        });
+
         try {
-            const renamer = new PhotoRenamer({
-                photoDir,
-                excelPath,
-                outputDir,
-                outputExt,
-                inputField,
-                outputField
-            });
-
-            renamer.setStatusCallback((message) => {
-                event.reply('renaming-status', message);
-            });
-
-            renamer.setProgressCallback((progress) => {
-                event.reply('renaming-progress', progress);
-            });
-
-            renamer.setFinishCallback((success) => {
-                event.reply('renaming-finished', success);
-            });
-
             await renamer.run();
         } catch (error) {
-            event.reply('renaming-status', `处理出错: ${error.message}`);
-            event.reply('renaming-finished', false);
+            if (runId === activeRunId) {
+                activeRenamer = null;
+                event.reply('renaming-status', `处理出错: ${error.message}`);
+                event.reply('renaming-finished', false);
+            }
         }
     });
 
     ipcMain.on('stop-renaming', (event) => {
-        event.reply('renaming-status', '操作已停止');
-        event.reply('renaming-finished', false);
+        if (activeRenamer) {
+            activeRenamer.stop();
+            event.reply('renaming-status', '正在停止...');
+        } else {
+            event.reply('renaming-status', '没有正在进行的任务');
+            event.reply('renaming-finished', false);
+        }
     });
 }
 

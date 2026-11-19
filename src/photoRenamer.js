@@ -29,6 +29,7 @@ class PhotoRenamer {
         this.statusCallback = null;
         this.progressCallback = null;
         this.finishCallback = null;
+        this.cancelled = false;
     }
 
     setStatusCallback(callback) {
@@ -43,7 +44,12 @@ class PhotoRenamer {
         this.finishCallback = callback;
     }
 
+    stop() {
+        this.cancelled = true;
+    }
+
     async run() {
+        this.cancelled = false;
         try {
             // 检查Excel文件是否存在
             if (!await fs.pathExists(this.excelPath)) {
@@ -126,8 +132,14 @@ class PhotoRenamer {
             // 处理图片文件
             const totalFiles = imageFiles.length;
             let processedFiles = 0;
+            const writtenTargets = new Set();
+
+            if (this.progressCallback) {
+                this.progressCallback(0);
+            }
 
             for (const filename of imageFiles) {
+                if (this.cancelled) break;
                 const fileBase = path.parse(filename).name;
                 const fileExt = path.parse(filename).ext;
                 const ksh = fileBase.trim();
@@ -150,24 +162,25 @@ class PhotoRenamer {
                         outputFileExt = ext_str;
                     }
 
-                    // 构建新文件名
-                    let baseName = `${sfz}${outputFileExt}`;
+                    // 构建新文件名：同一轮内重名才加后缀；重复执行时直接覆盖上次结果
+                    let newFileName = `${sfz}${outputFileExt}`;
                     let counter = 1;
-                    let newFileName = baseName;
-                    
-                    while (await fs.pathExists(path.join(this.outputDir, newFileName))) {
+                    while (writtenTargets.has(newFileName.toLowerCase())) {
                         newFileName = `${sfz}_${counter}${outputFileExt}`;
                         counter++;
                     }
+                    writtenTargets.add(newFileName.toLowerCase());
 
                     const srcPath = path.join(this.imgDir, filename);
                     const destPath = path.join(this.outputDir, newFileName);
 
                     try {
+                        if (path.resolve(srcPath) === path.resolve(destPath)) {
+                            this.statusCallback(`跳过: ${filename} 已是目标文件名`);
                         // 格式转换处理
-                        if (this.outputExt !== 'keep' && outputFileExt.toLowerCase() !== fileExt.toLowerCase()) {
+                        } else if (this.outputExt !== 'keep' && outputFileExt.toLowerCase() !== fileExt.toLowerCase()) {
                             // 检查是否支持该格式
-                            const SUPPORTED_FORMATS = ['jpg', 'jpeg', 'png', 'gif'];
+                            const SUPPORTED_FORMATS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'tiff'];
                             const targetFormat = outputFileExt.substring(1).toLowerCase();
                             
                             if (!SUPPORTED_FORMATS.includes(targetFormat)) {
@@ -196,10 +209,18 @@ class PhotoRenamer {
                 }
 
                 processedFiles++;
-                
+
                 // 更新进度
-                const progress = Math.round((processedFiles / totalFiles) * 100);
-                this.progressCallback(progress);
+                const progress = Math.min(100, Math.max(0, Math.round((processedFiles / totalFiles) * 100)));
+                if (this.progressCallback) {
+                    this.progressCallback(progress);
+                }
+            }
+
+            if (this.cancelled) {
+                this.statusCallback('操作已停止');
+                this.finishCallback(false);
+                return;
             }
 
             this.statusCallback(`处理完成! 成功处理 ${processedFiles}/${totalFiles} 个文件`);

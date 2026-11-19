@@ -25,7 +25,7 @@
             const hasFields = document.getElementById('input-field-combo').options.length > 0 && 
                             document.getElementById('output-field-combo').options.length > 0;
             
-            btn.disabled = !(hasExcel && hasFolder && hasOutput && hasFields);
+            btn.disabled = isProcessing || !(hasExcel && hasFolder && hasOutput && hasFields);
         }
         
         function startPhotoRenaming() {
@@ -43,7 +43,7 @@
             
             // 设置进度条
             document.getElementById('photo-rename-progress').style.width = '0%';
-            document.getElementById('progress-text').innerText = '处理中...';
+            document.getElementById('progress-text').innerText = '进度: 0%';
             
             // 获取输出格式
             let outputExt = document.getElementById('output-format-combo').value;
@@ -60,10 +60,9 @@
         
         function stopPhotoRenaming() {
             ipcRenderer.send('stop-renaming');
-            isProcessing = false;
-            document.getElementById('photo-rename-btn').disabled = false;
             document.getElementById('stop-rename-btn').disabled = true;
-            document.getElementById('progress-text').innerText = '已停止';
+            document.getElementById('progress-text').innerText = '正在停止...';
+            addLog('正在停止...');
         }
         
         function addLog(message) {
@@ -130,17 +129,23 @@
         });
         
         onIpc('renaming-progress', (event, progress) => {
-            document.getElementById('photo-rename-progress').style.width = `${progress}%`;
-            document.getElementById('progress-text').innerText = `进度: ${progress}%`;
+            const percent = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
+            document.getElementById('photo-rename-progress').style.width = `${percent}%`;
+            document.getElementById('progress-text').innerText = `进度: ${percent}%`;
         });
-        
+
         onIpc('renaming-finished', (event, success) => {
             isProcessing = false;
             document.getElementById('photo-rename-btn').disabled = false;
             document.getElementById('stop-rename-btn').disabled = true;
-            document.getElementById('progress-text').innerText = success ? '已完成!' : '已失败!';
-            
-            addLog(success ? '操作已完成!' : '操作失败!');
+            if (success) {
+                document.getElementById('photo-rename-progress').style.width = '100%';
+                document.getElementById('progress-text').innerText = '已完成!';
+            } else {
+                document.getElementById('progress-text').innerText = '已停止或失败!';
+            }
+
+            addLog(success ? '操作已完成!' : '操作已停止或失败!');
         });
         
         
