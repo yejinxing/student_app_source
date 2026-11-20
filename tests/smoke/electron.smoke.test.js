@@ -5,7 +5,7 @@ const fs = require('fs-extra');
 const os = require('os');
 const xlsx = require('xlsx');
 const { _electron: electron } = require('playwright-core');
-const { writeStudentWorkbook } = require('../helpers/fixtures');
+const { writeStudentWorkbook, writeClassAssignWorkbook } = require('../helpers/fixtures');
 
 const APP_ROOT = path.resolve(__dirname, '..', '..');
 
@@ -53,11 +53,26 @@ function writeMinimalPdf(dir) {
     return pdfPath;
 }
 
-test('Electron 应用启动并可切换五个页面', async (t) => {
+test('Electron 应用启动并可切换六个页面', async (t) => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'student-app-smoke-'));
     const excelPath = await writeColumnsFixture(dir);
     const studentExcelPath = path.join(dir, 'students.xlsx');
     writeStudentWorkbook(studentExcelPath);
+    const classAssignPath = path.join(dir, 'class-assign.xlsx');
+    writeClassAssignWorkbook(classAssignPath, [
+        {
+            '姓名': '测试甲', '身份证号码': '110101200001010011', '考生号': 'T000001',
+            '性别': '男', '层次': '本科', '层次代码': '1', '省份': '湖北',
+            '院系名称': '机械工程系', '院系代码': '01',
+            '专业名称': '机械设计制造及其自动化', '专业代码': '1', '班级数量': '2'
+        },
+        {
+            '姓名': '测试乙', '身份证号码': '110101200001010022', '考生号': 'T000002',
+            '性别': '女', '层次': '本科', '层次代码': '1', '省份': '河南',
+            '院系名称': '机械工程系', '院系代码': '01',
+            '专业名称': '机械设计制造及其自动化', '专业代码': '1', '班级数量': '2'
+        }
+    ]);
     writeMinimalPdf(dir);
     t.after(() => fs.remove(dir));
 
@@ -104,9 +119,9 @@ test('Electron 应用启动并可切换五个页面', async (t) => {
             jsCount: scripts.length
         };
     });
-    assert.equal(assets.cssCount, 8);
+    assert.equal(assets.cssCount, 9);
     assert.equal(assets.cssLoaded, true);
-    assert.equal(assets.jsCount, 7);
+    assert.equal(assets.jsCount, 8);
 
     const vendor = await page.evaluate(() => ({
         marked: typeof marked !== 'undefined' && typeof marked.parse === 'function',
@@ -118,6 +133,19 @@ test('Electron 应用启动并可切换五个页面', async (t) => {
     await page.evaluate(() => document.querySelectorAll('.sidebar-nav .nav-item')[1].click());
     const convertDisplay = await page.evaluate(() => document.getElementById('convert-page').style.display);
     assert.notEqual(convertDisplay, 'none');
+
+    await page.evaluate(() => document.querySelector('.sidebar-nav .nav-item[data-page="class-assign"]').click());
+    const classAssignDisplay = await page.evaluate(() => document.getElementById('class-assign-page').style.display);
+    assert.notEqual(classAssignDisplay, 'none');
+
+    const classAssignActions = await page.evaluate(() => ({
+        select: typeof selectClassAssignExcel === 'function',
+        start: typeof startClassAssign === 'function',
+        template: typeof downloadClassAssignTemplate === 'function'
+    }));
+    assert.equal(classAssignActions.select, true);
+    assert.equal(classAssignActions.start, true);
+    assert.equal(classAssignActions.template, true);
 
     const inlineHandlers = await page.evaluate(() => {
         return document.querySelectorAll('[onclick],[onchange],[oninput],[onmouseover],[onmouseout]').length;
@@ -144,6 +172,13 @@ test('Electron 应用启动并可切换五个页面', async (t) => {
         return window.electronAPI.invoke('get-excel-columns', filePath);
     }, excelPath);
     assert.deepEqual(columns, ['ksh', 'sfz', '英语考场号']);
+
+    const classAssignAnalysis = await page.evaluate((filePath) => {
+        return window.electronAPI.invoke('analyze-class-assign-excel', { filePath });
+    }, classAssignPath);
+    assert.equal(classAssignAnalysis.ok, true);
+    assert.equal(classAssignAnalysis.data.groups.length, 1);
+    assert.equal(classAssignAnalysis.data.groups[0].studentCount, 2);
 
     const detection = await page.evaluate((pdfDir) => {
         return window.electronAPI.invoke('detect-exam-schedule', { pdfDir });
