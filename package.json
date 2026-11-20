@@ -1,6 +1,6 @@
 {
   "name": "student_app",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "学生信息处理工具 - 高效便捷的学生数据处理工具",
   "main": "main.js",
   "scripts": {

@@ -1,13 +1,13 @@
-# 🎉 学生信息处理工具 v1.0.1
+# 🎉 学生信息处理工具 v1.0.2
 
-## 🛠️ 重构与优化（开发中，未发布）
+## 🛠️ 重构与优化
 
 - 拆分主进程与渲染层：`main.js` 从 2701 行降至入口级，新增 `src/main/**` 与 `src/renderer/**`
 - 拆分自动更新与 Excel 转换：`updater/`、`converter/` 模块化，最大源文件降至 408 行
 - Electron 安全加固：preload + contextBridge + contextIsolation，移除 nodeIntegration
 - 增加严格 CSP：移除内联事件，改用 `data-action` 事件委托；本地化 marked/DOMPurify
 - 安全校验：设置 schema、GitHub/Gitee 链接白名单、文件 realpath 与扩展名校验
-- 新增 34 个单元/集成测试与 Electron 冒烟测试，覆盖率约 90%
+- 新增单元/集成/冒烟测试，当前 86 个测试，行覆盖率约 92%
 - 准考证解析与 Excel 转换迁移至 `utilityProcess`，避免大文件阻塞主进程
 - 修复：`showToast` 未定义、`excel-columns` 串页、更新清理标记变量未定义、日期归一化不补零、VBS 转义与非 Windows 安装
 - 修复：utilityProcess 中 pdfjs 环境误判导致 `workerSrc`、标准字体 `fetch failed` 与审核结果全 0 的问题
@@ -23,6 +23,14 @@
 - 新增仅表头的“学生分班模板.xlsx”下载
 
 ## 📋 更新内容
+
+### 🧮 分班编学号（新功能）
+- 独立“分班编学号”页面，按层次 + 院系 + 专业分组，专业之间严格隔离
+- 班级数量优先读取 Excel，缺失时按每班 30–40 人自动建议
+- 确认页可修改班级数和入学年份，异常班额分级提示
+- 男女均衡、省份均衡，班内男生在前、女生在后
+- 按 11 位规则生成学号，保留原列并导出新的 Excel
+- 提供仅表头的“学生分班模板.xlsx”下载
 
 ### 📄 准考证审核功能 (新功能!)
 - **智能 PDF 解析**：采用 XY 物理坐标重构算法，支持单页单证及一页多证的复杂排版解析。
