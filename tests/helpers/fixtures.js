@@ -6,6 +6,11 @@ const STUDENT_COLUMNS = [
     '民族', '生源地所在地', '备注'
 ];
 
+const CLASS_ASSIGN_COLUMNS = [
+    '姓名', '身份证号码', '考生号', '性别', '层次', '层次代码',
+    '省份', '院系名称', '院系代码', '专业名称', '专业代码', '班级数量'
+];
+
 function defaultStudentRows() {
     return [
         {
@@ -63,4 +68,17 @@ function writeStudentWorkbook(filePath, rows = defaultStudentRows()) {
     xlsx.writeFile(workbook, filePath);
 }
 
-module.exports = { STUDENT_COLUMNS, defaultStudentRows, writeStudentWorkbook };
+function writeClassAssignWorkbook(filePath, rows) {
+    const worksheet = xlsx.utils.json_to_sheet(rows, { header: CLASS_ASSIGN_COLUMNS });
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    xlsx.writeFile(workbook, filePath);
+}
+
+module.exports = {
+    STUDENT_COLUMNS,
+    CLASS_ASSIGN_COLUMNS,
+    defaultStudentRows,
+    writeStudentWorkbook,
+    writeClassAssignWorkbook
+};
