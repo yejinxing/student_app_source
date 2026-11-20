@@ -16,7 +16,10 @@ build/
 *.swo
 *~
 
-# 日志文件
+# 学生数据文档仅本地保留；docs/superpowers 下的设计与计划文档例外
+docs/*
+!docs/superpowers/
+!docs/superpowers/**
 *.log
 logs/
 npm-debug.log*
