@@ -37,7 +37,11 @@ const INVOKE_CHANNELS = new Set([
     'select-pdf-dir',
     'get-excel-columns',
     'detect-exam-schedule',
-    'open-file'
+    'open-file',
+    'select-class-assign-excel',
+    'analyze-class-assign-excel',
+    'generate-class-assign',
+    'download-class-assign-template'
 ]);
 
 const RECEIVE_CHANNELS = new Set([

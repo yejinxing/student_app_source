@@ -11,6 +11,7 @@ const { registerSystemSettingsIpc } = require('./src/main/ipc/systemSettingsIpc'
 const { registerCacheIpc } = require('./src/main/ipc/cacheIpc');
 const { registerMiscIpc } = require('./src/main/ipc/miscIpc');
 const { registerTicketAuditIpc } = require('./src/main/ipc/ticketAuditIpc');
+const { registerClassAssignIpc } = require('./src/main/ipc/classAssignIpc');
 
 let mainWindow;
 
@@ -20,6 +21,7 @@ registerSystemSettingsIpc();
 registerCacheIpc();
 registerMiscIpc();
 registerTicketAuditIpc();
+registerClassAssignIpc();
 
 app.whenReady().then(async () => {
     // 应用启动时延迟清理更新缓存
