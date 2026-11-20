@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="src/renderer/css/settings.css">
     <link rel="stylesheet" href="src/renderer/css/forms.css">
     <link rel="stylesheet" href="src/renderer/css/pages.css">
+    <link rel="stylesheet" href="src/renderer/css/class-assign.css">
     <link rel="stylesheet" href="src/renderer/css/modals.css">
     <link rel="stylesheet" href="src/renderer/css/animations.css">
 </head>
@@ -67,6 +68,15 @@
                     </svg>
                 </span>
                 <span class="nav-label">照片处理</span>
+            </div>
+            <div class="nav-item" data-action="show-page" data-page="class-assign" title="分班编学号">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 6h16M4 12h16M4 18h10"/>
+                        <circle cx="18" cy="18" r="3"/>
+                    </svg>
+                </span>
+                <span class="nav-label">分班编学号</span>
             </div>
         </nav>
         
@@ -341,7 +351,23 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- 分班编学号二次确认弹窗 -->
+    <div class="modal-overlay" id="class-assign-confirm-modal" data-action="close-class-assign-overlay">
+        <div class="modal-content">
+            <button class="modal-close" data-action="close-class-assign-confirm">&times;</button>
+            <h3 style="margin-bottom:12px;">确认生成</h3>
+            <p style="color:var(--text-secondary); font-size:14px; line-height:1.6; margin-bottom:12px;">
+                以下专业的班级人数需要重点确认，请确认是否继续生成：
+            </p>
+            <ul id="class-assign-confirm-list" class="class-assign-confirm-list"></ul>
+            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+                <button class="btn btn-secondary" data-action="close-class-assign-confirm">返回修改</button>
+                <button class="btn btn-danger" data-action="confirm-class-assign">仍然生成</button>
+            </div>
+        </div>
+    </div>
+
     <div class="content">
         <!-- 主页 -->
         <div id="home-page">
@@ -408,7 +434,21 @@
                     </div>
                     <span class="quick-action-arrow">→</span>
                 </div>
-                
+
+                <div class="quick-action-card" data-action="show-page-by-name" data-page="class-assign">
+                    <div class="quick-action-icon" style="background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 6h16M4 12h16M4 18h10"/>
+                            <circle cx="18" cy="18" r="3"/>
+                        </svg>
+                    </div>
+                    <div class="quick-action-info">
+                        <h4>分班编学号</h4>
+                        <p>按专业均衡分班并生成学号</p>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
+                </div>
+
                 <div class="quick-action-card" data-action="show-page-by-name" data-page="settings">
                     <div class="quick-action-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -634,7 +674,78 @@
                 </div>
             </div>
         </div>
-        
+
+        <div id="class-assign-page" style="display:none;">
+            <div class="page-header">
+                <h2>分班编学号</h2>
+                <p class="page-header-subtitle">按专业均衡分班并生成学号</p>
+            </div>
+
+            <div class="card">
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                    选择学生信息 Excel，系统按专业均衡分班并生成 11 位学号。班级数量优先读取 Excel，缺失时自动建议。
+                </p>
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">学生信息 Excel</label>
+                        <div class="input-group">
+                            <input type="text" id="class-assign-excel-path" readonly placeholder="选择包含学生信息的 Excel 文件">
+                            <button class="btn btn-secondary" data-action="select-class-assign-excel">浏览</button>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:16px;">
+                    <button class="btn btn-outline" data-action="download-class-assign-template">下载模板</button>
+                </div>
+                <div id="class-assign-file-status" class="status"></div>
+            </div>
+
+            <div class="card" id="class-assign-plan-card" style="display:none; margin-top:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+                    <div>
+                        <h3 style="margin:0; font-size:15px; font-weight:600; color:var(--primary);">确认分班方案</h3>
+                        <p id="class-assign-summary" style="margin:6px 0 0; font-size:13px; color:var(--text-muted);"></p>
+                    </div>
+                    <div class="form-group" style="margin:0; min-width:160px;">
+                        <label class="form-label">入学年份</label>
+                        <input type="number" id="class-assign-year" class="class-assign-year-input" min="2000" max="2100" step="1">
+                    </div>
+                </div>
+                <div id="class-assign-warning-banner" class="status" style="display:none;"></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin:12px 0;">
+                    <div style="font-size:12px; color:var(--text-muted);">
+                        图例：
+                        <span class="class-assign-legend class-assign-legend-ok">正常 30–40</span>
+                        <span class="class-assign-legend class-assign-legend-warn">接近边界 28–29 / 41–42</span>
+                        <span class="class-assign-legend class-assign-legend-danger">需重点确认 &lt;28 或 &gt;42</span>
+                    </div>
+                    <label style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="class-assign-only-warnings"> 只看需要确认的专业
+                    </label>
+                </div>
+                <div style="overflow:auto; max-height:420px; border:1px solid var(--border); border-radius:var(--radius-sm);">
+                    <table class="class-assign-table">
+                        <thead>
+                            <tr>
+                                <th>院系</th>
+                                <th>专业</th>
+                                <th>层次</th>
+                                <th>专业人数</th>
+                                <th>班级数量</th>
+                                <th>各班人数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="class-assign-plan-body"></tbody>
+                    </table>
+                </div>
+                <div style="display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:16px;">
+                    <span id="class-assign-form-error" style="color:var(--danger); font-size:13px;"></span>
+                    <button id="class-assign-generate-btn" class="btn" data-action="start-class-assign" disabled>生成分班学号 Excel</button>
+                </div>
+                <div id="class-assign-result" class="status"></div>
+            </div>
+        </div>
+
         <div id="settings-page" style="display:none;">
             <div class="page-header">
             <h2>系统设置</h2>
@@ -887,6 +998,7 @@
     <script src="src/renderer/js/convert.js"></script>
     <script src="src/renderer/js/ticket-audit.js"></script>
     <script src="src/renderer/js/photo-rename.js"></script>
+    <script src="src/renderer/js/class-assign.js"></script>
     <script src="src/renderer/js/updater.js"></script>
     <script src="src/renderer/js/about.js"></script>
     <script src="src/renderer/js/settings.js"></script>

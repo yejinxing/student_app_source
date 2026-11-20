@@ -36,6 +36,7 @@
             document.getElementById('convert-page').style.display = page === 'convert' ? 'block' : 'none';
             document.getElementById('ticket-audit-page').style.display = page === 'ticket-audit' ? 'block' : 'none';
             document.getElementById('photo-rename-page').style.display = page === 'photo-rename' ? 'block' : 'none';
+            document.getElementById('class-assign-page').style.display = page === 'class-assign' ? 'block' : 'none';
             document.getElementById('settings-page').style.display = page === 'settings' ? 'block' : 'none';
             document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => el.classList.remove('active'));
             if (navElement) {
@@ -49,10 +50,19 @@
             document.getElementById('convert-page').style.display = page === 'convert' ? 'block' : 'none';
             document.getElementById('ticket-audit-page').style.display = page === 'ticket-audit' ? 'block' : 'none';
             document.getElementById('photo-rename-page').style.display = page === 'photo-rename' ? 'block' : 'none';
+            document.getElementById('class-assign-page').style.display = page === 'class-assign' ? 'block' : 'none';
             document.getElementById('settings-page').style.display = page === 'settings' ? 'block' : 'none';
 
             // 更新侧边栏选中状态
-            const pageIndex = {'home': 0, 'convert': 1, 'ticket-audit': 2, 'photo-rename': 3, 'settings': 4};            document.querySelectorAll('.sidebar-nav .nav-item').forEach((el, index) => {
+            const pageIndex = {
+                'home': 0,
+                'convert': 1,
+                'ticket-audit': 2,
+                'photo-rename': 3,
+                'class-assign': 4,
+                'settings': 5
+            };
+            document.querySelectorAll('.sidebar-nav .nav-item').forEach((el, index) => {
                 el.classList.toggle('active', index === pageIndex[page]);
             });
         }
@@ -114,6 +124,14 @@
             'select-photo-output-folder': () => selectPhotoOutputFolder(),
             'start-photo-renaming': () => startPhotoRenaming(),
             'stop-photo-renaming': () => stopPhotoRenaming(),
+            'select-class-assign-excel': () => selectClassAssignExcel(),
+            'start-class-assign': () => startClassAssign(),
+            'download-class-assign-template': () => downloadClassAssignTemplate(),
+            'close-class-assign-overlay': (element, clickEvent) => {
+                if (!clickEvent.target.closest('.modal-content')) closeClassAssignConfirm();
+            },
+            'close-class-assign-confirm': () => closeClassAssignConfirm(),
+            'confirm-class-assign': () => confirmClassAssign(),
             'select-default-output-dir': () => selectDefaultOutputDir(),
             'clear-cache': () => clearCache(),
             'export-settings': () => exportSettings(),
