@@ -99,8 +99,8 @@
 
         function classAssignEffectiveLevel(group, option) {
             if (!option || !option.valid || option.level === 'danger' || option.level === 'invalid') return 'danger';
-            if (option.level === 'warn') return 'warn';
             if (group.warnings.some(warning => warning.code === 'CLASS_COUNT_EXCEL_INVALID')) return 'danger';
+            if (option.level === 'warn') return 'warn';
             if (group.warnings.some(warning =>
                 warning.code === 'CLASS_COUNT_EXCEL_INCONSISTENT' ||
                 warning.code === 'CLASS_COUNT_EXCEL_PARTIAL'

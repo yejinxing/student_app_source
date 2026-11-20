@@ -147,6 +147,19 @@ test('Electron 应用启动并可切换六个页面', async (t) => {
     assert.equal(classAssignActions.start, true);
     assert.equal(classAssignActions.template, true);
 
+    const effectiveLevels = await page.evaluate(() => ({
+        invalidSourceWarnOption: classAssignEffectiveLevel(
+            { warnings: [{ code: 'CLASS_COUNT_EXCEL_INVALID' }] },
+            { valid: true, level: 'warn', reasons: [] }
+        ),
+        inconsistentSourceOkOption: classAssignEffectiveLevel(
+            { warnings: [{ code: 'CLASS_COUNT_EXCEL_INCONSISTENT' }] },
+            { valid: true, level: 'ok', reasons: [] }
+        )
+    }));
+    assert.equal(effectiveLevels.invalidSourceWarnOption, 'danger');
+    assert.equal(effectiveLevels.inconsistentSourceOkOption, 'warn');
+
     const inlineHandlers = await page.evaluate(() => {
         return document.querySelectorAll('[onclick],[onchange],[oninput],[onmouseover],[onmouseout]').length;
     });
