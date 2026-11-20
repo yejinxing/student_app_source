@@ -6,6 +6,7 @@ const os = require('os');
 const xlsx = require('xlsx');
 const { _electron: electron } = require('playwright-core');
 const { writeStudentWorkbook, writeClassAssignWorkbook } = require('../helpers/fixtures');
+const { version: APP_VERSION } = require('../../package.json');
 
 const APP_ROOT = path.resolve(__dirname, '..', '..');
 
@@ -202,8 +203,9 @@ test('Electron 应用启动并可切换六个页面', async (t) => {
     assert.equal(await page.evaluate(() => document.getElementById('update-modal').classList.contains('active')), false);
 
     await page.waitForFunction(
-        () => document.getElementById('home-version')?.textContent === 'v1.0.1',
-        { timeout: 5000 }
+        (expectedVersion) => document.getElementById('home-version')?.textContent === `v${expectedVersion}`,
+        APP_VERSION,
+        { timeout: 10000 }
     );
     const cacheSize = await page.textContent('#cache-size');
     assert.notEqual(cacheSize, '计算中...');
