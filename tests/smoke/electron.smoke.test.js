@@ -160,6 +160,33 @@ test('Electron 应用启动并可切换六个页面', async (t) => {
     assert.equal(effectiveLevels.invalidSourceWarnOption, 'danger');
     assert.equal(effectiveLevels.inconsistentSourceOkOption, 'warn');
 
+    const classAssignNotices = await page.evaluate(() => classAssignInputNotices({
+        existingTargetColumns: ['学号', '班级名称'],
+        warnings: []
+    }));
+    assert.ok(classAssignNotices.length > 0);
+    assert.ok(classAssignNotices[0].includes('将覆盖'));
+
+    const classAssignErrorRender = await page.evaluate(() => {
+        const element = document.createElement('div');
+        element.id = 'class-assign-smoke-error';
+        document.body.appendChild(element);
+        renderClassAssignErrors('class-assign-smoke-error', {
+            message: '校验失败',
+            details: [{ rowNumber: 2, field: '姓名', message: '姓名不能为空' }]
+        });
+        const result = {
+            text: element.textContent,
+            display: element.style.display,
+            className: element.className
+        };
+        element.remove();
+        return result;
+    });
+    assert.ok(classAssignErrorRender.text.includes('第 2 行'));
+    assert.ok(classAssignErrorRender.text.includes('姓名不能为空'));
+    assert.equal(classAssignErrorRender.display, 'block');
+
     const inlineHandlers = await page.evaluate(() => {
         return document.querySelectorAll('[onclick],[onchange],[oninput],[onmouseover],[onmouseout]').length;
     });

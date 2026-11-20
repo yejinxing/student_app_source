@@ -36,10 +36,10 @@ function makeRows({ prefix, total, maleCount, majorCode, majorName, classCount =
     }));
 }
 
-function readOutput(filePath) {
+function readOutput(filePath, raw = false) {
     const workbook = xlsx.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    return xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+    return xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '', raw });
 }
 
 test('分析并生成分班学号 Excel', async (t) => {
@@ -215,6 +215,15 @@ test('无效班级数阻止生成', async (t) => {
     });
     assert.equal(result.ok, false);
     assert.equal(result.error.code, 'CLASS_COUNT_INVALID');
+
+    const overflow = generateWorkbook({
+        filePath: inputPath,
+        fingerprint: analysis.data.fingerprint,
+        classCounts: { '1|01|1': 10 },
+        year: 2027
+    });
+    assert.equal(overflow.ok, false);
+    assert.equal(overflow.error.code, 'CLASS_COUNT_OVERFLOW');
 });
 
 test('分析时提示将覆盖已有目标列', async (t) => {
@@ -291,7 +300,7 @@ test('无编号列时生成连续文本编号', async (t) => {
     });
     assert.equal(result.ok, true);
 
-    const output = readOutput(result.data.outputPath);
+    const output = readOutput(result.data.outputPath, true);
     const numberIndex = output[0].indexOf('编号');
     assert.ok(numberIndex >= 0);
     const numbers = output.slice(1).map(row => row[numberIndex]);

@@ -4,7 +4,43 @@
             const element = document.getElementById(elementId);
             if (!element) return;
             element.className = type ? `status ${type}` : 'status';
+            element.style.display = 'block';
             element.textContent = message || '';
+        }
+
+        function renderClassAssignErrors(elementId, error) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            element.className = 'status error';
+            element.style.display = 'block';
+            element.textContent = (error && error.message) || '操作失败';
+
+            const details = error && Array.isArray(error.details) ? error.details : [];
+            if (details.length === 0) return;
+
+            const limit = 50;
+            const list = document.createElement('ul');
+            list.className = 'class-assign-error-list';
+            for (const detail of details.slice(0, limit)) {
+                const parts = [];
+                if (detail && detail.rowNumber !== undefined && detail.rowNumber !== null) {
+                    parts.push(`第 ${detail.rowNumber} 行`);
+                } else if (detail && Array.isArray(detail.rowNumbers) && detail.rowNumbers.length > 0) {
+                    parts.push(`第 ${detail.rowNumbers.join('、')} 行`);
+                }
+                if (detail && detail.field) parts.push(detail.field);
+                if (detail && detail.message) parts.push(detail.message);
+                if (parts.length === 0) continue;
+                const li = document.createElement('li');
+                li.textContent = parts.join(' · ');
+                list.appendChild(li);
+            }
+            if (details.length > limit) {
+                const li = document.createElement('li');
+                li.textContent = `另有 ${details.length - limit} 条错误未显示`;
+                list.appendChild(li);
+            }
+            element.appendChild(list);
         }
 
         async function selectClassAssignExcel() {
@@ -25,12 +61,12 @@
             try {
                 const result = await ipcRenderer.invoke('analyze-class-assign-excel', { filePath });
                 if (!result || !result.ok) {
-                    const message = result && result.error ? result.error.message : '分析失败';
-                    setClassAssignStatus('class-assign-file-status', message, 'error');
+                    renderClassAssignErrors('class-assign-file-status', result && result.error);
                     return;
                 }
                 classAssignState = result.data;
                 classAssignState.overrides = {};
+                classAssignState.warnings = Array.isArray(result.warnings) ? result.warnings : [];
                 renderClassAssignState();
                 setClassAssignStatus('class-assign-file-status', '分析完成，请确认分班方案。', 'success');
             } catch (error) {
@@ -68,10 +104,49 @@
             if (!data) return;
             const source = data.summary.sourceCounts || {};
             document.getElementById('class-assign-summary').textContent =
-                `学生 ${data.summary.totalStudents} 人 · ${data.summary.deptCount} 个院系 · ` +
+                `工作表 ${data.sheetName} · 学生 ${data.summary.totalStudents} 人 · ${data.summary.deptCount} 个院系 · ` +
                 `${data.summary.groupCount} 个专业组 · Excel 班级数 ${source.excel || 0} 组 · ` +
                 `部分填写 ${source['excel-partial'] || 0} 组 · 自动建议 ${source.auto || 0} 组 · ` +
                 `不一致 ${source['excel-inconsistent'] || 0} 组 · 无效 ${source['excel-invalid'] || 0} 组`;
+        }
+
+        function classAssignInputNotices(data) {
+            if (!data) return [];
+            const notices = [];
+            const seen = new Set();
+            const pushOnce = (message) => {
+                if (!message || seen.has(message)) return;
+                seen.add(message);
+                notices.push(message);
+            };
+
+            const existing = Array.isArray(data.existingTargetColumns) ? data.existingTargetColumns : [];
+            if (existing.length > 0) {
+                pushOnce(`将覆盖已有的 ${existing.join('、')} 列`);
+            }
+
+            const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+            const perGroupCodes = new Set([
+                'CLASS_COUNT_EXCEL_INVALID',
+                'CLASS_COUNT_EXCEL_INCONSISTENT',
+                'CLASS_COUNT_EXCEL_PARTIAL'
+            ]);
+            for (const warning of warnings) {
+                if (!warning) continue;
+                if (warning.code === 'DUPLICATE_NUMBER' || perGroupCodes.has(warning.code)) {
+                    pushOnce(warning.message);
+                }
+            }
+
+            const provinceMissing = warnings.filter(warning => warning && warning.code === 'PROVINCE_MISSING').length;
+            if (provinceMissing > 0) {
+                pushOnce(`有 ${provinceMissing} 行省份为空，按“未填写省份”参与均衡`);
+            }
+            const deptUnknown = warnings.filter(warning => warning && warning.code === 'DEPT_CODE_UNKNOWN').length;
+            if (deptUnknown > 0) {
+                pushOnce(`有 ${deptUnknown} 行院系代码不在 01–09 范围内，请确认`);
+            }
+            return notices;
         }
 
         function classAssignOption(group, classCount) {
@@ -177,13 +252,23 @@
                 if (level === 'danger') dangers += 1;
                 else if (level === 'warn') warnings += 1;
             }
-            if (warnings + dangers > 0) {
-                banner.style.display = 'block';
-                banner.className = 'status warning';
-                banner.textContent = `有 ${warnings} 个专业接近边界，${dangers} 个专业需要重点确认或修正。`;
-            } else {
+            const notices = classAssignInputNotices(data);
+            banner.textContent = '';
+            if (notices.length === 0 && warnings + dangers === 0) {
                 banner.style.display = 'none';
-                banner.textContent = '';
+                return;
+            }
+            banner.style.display = 'block';
+            banner.className = 'status warning';
+            const addLine = (message) => {
+                const line = document.createElement('div');
+                line.className = 'class-assign-notice-line';
+                line.textContent = message;
+                banner.appendChild(line);
+            };
+            for (const notice of notices) addLine(notice);
+            if (warnings + dangers > 0) {
+                addLine(`有 ${warnings} 个专业接近边界，${dangers} 个专业需要重点确认或修正。`);
             }
         }
 
@@ -311,8 +396,7 @@
                     year: validation.year
                 });
                 if (!result || !result.ok) {
-                    resultElement.className = 'status error';
-                    resultElement.textContent = result && result.error ? result.error.message : '生成失败';
+                    renderClassAssignErrors('class-assign-result', result && result.error);
                     return;
                 }
                 resultElement.className = 'status success';

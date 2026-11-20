@@ -45,6 +45,7 @@ const required = [
     '/assets/icon.png',
     '/assets/学生信息模板.xlsx',
     '/assets/准考证审核数据模板.xlsx',
+    '/assets/学生分班模板.xlsx',
     '/node_modules/marked/lib/marked.umd.js',
     '/node_modules/dompurify/dist/purify.min.js',
     '/node_modules/pdfjs-dist/legacy/build/pdf.js',

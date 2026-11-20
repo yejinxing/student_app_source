@@ -163,6 +163,14 @@ function generateWorkbook({ filePath, fingerprint, classCounts, year }) {
             ? overrides[group.key]
             : group.initialClassCount;
         const requested = toInteger(raw);
+        if (requested !== null && requested > 9) {
+            return fail(
+                'CLASS_COUNT_OVERFLOW',
+                `${group.majorName} 的班级数超过上限 9：${requested}`,
+                undefined,
+                warningsSoFar
+            );
+        }
         const option = requested === null
             ? null
             : group.options.find(candidate => candidate.classCount === requested);
