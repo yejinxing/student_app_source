@@ -6,7 +6,17 @@ const xlsx = require('xlsx');
 
 const { analyzeWorkbook, generateWorkbook } = require('../../src/classAssigner');
 const { makeTempDir, removeTempDir } = require('../helpers/tmp');
-const { writeClassAssignWorkbook } = require('../helpers/fixtures');
+const { writeClassAssignWorkbook, CLASS_ASSIGN_COLUMNS } = require('../helpers/fixtures');
+
+function writeSheet(filePath, headers, rows) {
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, xlsx.utils.aoa_to_sheet([headers, ...rows]), 'Sheet1');
+    xlsx.writeFile(workbook, filePath);
+}
+
+function rowsToAoa(headers, rows) {
+    return rows.map(row => headers.map(name => (row[name] === undefined ? '' : row[name])));
+}
 
 function makeRows({ prefix, total, maleCount, majorCode, majorName, classCount = '', offset = 0 }) {
     const provinces = ['湖北', '河南', '山东', '江西', '湖南'];
@@ -99,8 +109,17 @@ test('分析并生成分班学号 Excel', async (t) => {
     );
     assert.ok(byMajor['1'].every(row => Number(row[countIndex]) === 2));
 
-    const aNames = new Set(byMajor['1'].map(row => row[header.indexOf('姓名')]));
-    assert.ok([...aNames].every(name => name.startsWith('A')));
+    const aNames = byMajor['1'].map(row => row[header.indexOf('姓名')]);
+    assert.equal(aNames.length, 50);
+    assert.ok(aNames.every(name => name.startsWith('A')));
+
+    const bNames = byMajor['2'].map(row => row[header.indexOf('姓名')]);
+    assert.equal(bNames.length, 82);
+    assert.ok(bNames.every(name => name.startsWith('B')));
+
+    const cNames = byMajor['3'].map(row => row[header.indexOf('姓名')]);
+    assert.equal(cNames.length, 72);
+    assert.ok(cNames.every(name => name.startsWith('C')));
 });
 
 test('文件指纹变化拒绝生成', async (t) => {
@@ -196,4 +215,142 @@ test('无效班级数阻止生成', async (t) => {
     });
     assert.equal(result.ok, false);
     assert.equal(result.error.code, 'CLASS_COUNT_INVALID');
+});
+
+test('分析时提示将覆盖已有目标列', async (t) => {
+    const dir = await makeTempDir();
+    t.after(() => removeTempDir(dir));
+    const inputPath = path.join(dir, 'existing-columns.xlsx');
+    const headers = [
+        '姓名', '身份证号码', '考生号', '性别', '层次', '层次代码', '省份',
+        '院系名称', '院系代码', '专业名称', '专业代码', '学号', '班级名称'
+    ];
+    const rows = makeRows({ prefix: 'H', total: 50, maleCount: 30, majorCode: '1', majorName: '专业H' });
+    writeSheet(inputPath, headers, rowsToAoa(headers, rows));
+
+    const analysis = analyzeWorkbook(inputPath);
+    assert.equal(analysis.ok, true);
+    assert.ok(analysis.data.existingTargetColumns.includes('学号'));
+    assert.ok(analysis.data.existingTargetColumns.includes('班级名称'));
+
+    const warning = analysis.warnings.find(item => item.code === 'EXISTING_TARGET_COLUMNS');
+    assert.ok(warning);
+    assert.match(warning.message, /学号/);
+    assert.match(warning.message, /班级名称/);
+});
+
+test('分析时提示编号重复且不阻止生成', async (t) => {
+    const dir = await makeTempDir();
+    t.after(() => removeTempDir(dir));
+    const inputPath = path.join(dir, 'duplicate-number.xlsx');
+    const headers = ['编号', ...CLASS_ASSIGN_COLUMNS];
+    const rows = rowsToAoa(headers, makeRows({
+        prefix: 'I', total: 50, maleCount: 30, majorCode: '1', majorName: '专业I'
+    }));
+    rows[0][0] = '001';
+    rows[1][0] = '002';
+    rows[2][0] = '002';
+    writeSheet(inputPath, headers, rows);
+
+    const analysis = analyzeWorkbook(inputPath);
+    assert.equal(analysis.ok, true);
+    const warning = analysis.warnings.find(item => item.code === 'DUPLICATE_NUMBER');
+    assert.ok(warning);
+    assert.match(warning.message, /002/);
+
+    const result = generateWorkbook({
+        filePath: inputPath,
+        fingerprint: analysis.data.fingerprint,
+        classCounts: { '1|01|1': 2 },
+        year: 2027
+    });
+    assert.equal(result.ok, true);
+    assert.ok(result.warnings.some(item => item.code === 'EXISTING_TARGET_COLUMNS'));
+
+    const output = readOutput(result.data.outputPath);
+    const numberIndex = output[0].indexOf('编号');
+    const values = output.slice(1).map(row => row[numberIndex]);
+    assert.equal(values.filter(value => value === '002').length, 2);
+    assert.ok(values.includes('001'));
+});
+
+test('无编号列时生成连续文本编号', async (t) => {
+    const dir = await makeTempDir();
+    t.after(() => removeTempDir(dir));
+    const inputPath = path.join(dir, 'auto-number.xlsx');
+    writeClassAssignWorkbook(inputPath, makeRows({
+        prefix: 'J', total: 50, maleCount: 30, majorCode: '1', majorName: '专业J'
+    }));
+
+    const analysis = analyzeWorkbook(inputPath);
+    const result = generateWorkbook({
+        filePath: inputPath,
+        fingerprint: analysis.data.fingerprint,
+        classCounts: { '1|01|1': 2 },
+        year: 2027
+    });
+    assert.equal(result.ok, true);
+
+    const output = readOutput(result.data.outputPath);
+    const numberIndex = output[0].indexOf('编号');
+    assert.ok(numberIndex >= 0);
+    const numbers = output.slice(1).map(row => row[numberIndex]);
+    assert.equal(numbers.length, 50);
+    assert.ok(numbers.every(value => typeof value === 'string'));
+    const expected = Array.from({ length: 50 }, (_, index) => String(index + 1));
+    assert.deepEqual(numbers.slice().sort((a, b) => Number(a) - Number(b)), expected);
+});
+
+test('已有编号列时保留原值', async (t) => {
+    const dir = await makeTempDir();
+    t.after(() => removeTempDir(dir));
+    const inputPath = path.join(dir, 'keep-number.xlsx');
+    const headers = ['编号', ...CLASS_ASSIGN_COLUMNS];
+    const aoa = rowsToAoa(headers, makeRows({
+        prefix: 'K', total: 50, maleCount: 30, majorCode: '1', majorName: '专业K'
+    }));
+    const expected = [];
+    for (let index = 0; index < aoa.length; index += 1) {
+        const value = `K${String(index + 1).padStart(3, '0')}`;
+        aoa[index][0] = value;
+        expected.push(value);
+    }
+    writeSheet(inputPath, headers, aoa);
+
+    const analysis = analyzeWorkbook(inputPath);
+    const result = generateWorkbook({
+        filePath: inputPath,
+        fingerprint: analysis.data.fingerprint,
+        classCounts: { '1|01|1': 2 },
+        year: 2027
+    });
+    assert.equal(result.ok, true);
+
+    const output = readOutput(result.data.outputPath);
+    const numberIndex = output[0].indexOf('编号');
+    const values = output.slice(1).map(row => row[numberIndex]);
+    assert.deepEqual(values.slice().sort(), expected.slice().sort());
+});
+
+test('文件读取失败返回错误对象而不抛出', async (t) => {
+    const dir = await makeTempDir();
+    t.after(() => removeTempDir(dir));
+    const missingPath = path.join(dir, 'missing.xlsx');
+
+    const analysis = analyzeWorkbook(missingPath);
+    assert.equal(analysis.ok, false);
+    assert.equal(typeof analysis.error.code, 'string');
+    assert.ok(analysis.error.message);
+    assert.deepEqual(analysis.warnings, []);
+
+    const result = generateWorkbook({
+        filePath: missingPath,
+        fingerprint: '1:1',
+        classCounts: {},
+        year: 2027
+    });
+    assert.equal(result.ok, false);
+    assert.equal(typeof result.error.code, 'string');
+    assert.ok(result.error.message);
+    assert.deepEqual(result.warnings, []);
 });
